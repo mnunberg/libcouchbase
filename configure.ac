@@ -214,6 +214,13 @@ AM_CONDITIONAL(BUILD_PLUGINS, [test "x$ac_cv_enable_plugins" = "xyes"])
 AS_IF([test "x$ac_cv_enable_plugins" = "xyes"],
       [AC_DEFINE([BUILD_PLUGINS], [1], [Build plugins])])
 
+AC_ARG_ENABLE([mt],
+              [AS_HELP_STRING([--enable-mt], [Build MT (thread) extensions.])],
+              [ac_cv_enable_mt="yes"],
+              [ac_cv_enable_mt="no"])
+
+AM_CONDITIONAL(BUILD_LCBMT, [test "x$ac_cv_enable_mt" = "xyes"])
+
 dnl Check that we can use winsock2 plugin
 AC_CACHE_CHECK([for winsock2], [ac_cv_have_winsock2],
   [ saved_libs="$LIBS"

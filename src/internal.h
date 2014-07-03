@@ -108,6 +108,9 @@ extern "C" {
         int wait;
         const void *cookie;
 
+        /** Not used in the core, but is a field to place any thread/locking info */
+        void *thrctx;
+
         /** Socket pool for memcached connections */
         lcbio_MGR *memd_sockpool;
 
@@ -224,6 +227,8 @@ extern "C" {
 
     lcb_RESPCALLBACK
     lcb_find_callback(lcb_t instance, lcb_CALLBACKTYPE cbtype);
+    lcb_RESPCALLBACK
+    lcb_find_callback2(const struct lcb_callback_st *callbacks, lcb_CALLBACKTYPE type);
 
     /* These two functions exist to allow the tests to keep the loop alive while
      * scheduling other operations asynchronously */

@@ -190,6 +190,15 @@ libcouchbase_libuv_la_LIBADD = -luv
 libcouchbase_libuv_la_CPPFLAGS = $(AM_CPPFLAGS) $(CPPFLAGS) -DLIBCOUCHBASE_INTERNAL=1
 endif
 
+if BUILD_LCBMT
+lib_LTLIBRARIES += libcouchbase_mtio.la
+libcouchbase_mtio_la_SOURCES = src/mt/plugin-mt.c
+libcouchbase_mtio_la_CPPFLAGS = $(AM_CPPFLAGS) $(CPPFLAGS) -pthread -DLIBCOUCHBASE_INTERNAL
+libcouchbase_mtio_la_LIBADD = -lpthread
+libcouchbase_la_CPPFLAGS += -pthread
+libcouchbase_la_LIBADD += -lpthread
+endif
+
 gtest-1.7.0.zip:
 	@echo "+--------------------------------+"
 	@echo "| Download Google test framework |"
@@ -343,7 +352,8 @@ EXTRA_DIST += CONTRIBUTING.md LICENSE README.markdown \
               tests/start_mock.sh \
               win32 \
               VERSION src/probes.d \
-              $(man_MANS)
+              $(man_MANS) \
+              tools/cbc-mtbench.cc tools/cbc-mtwrap.cc
 
 if HAVE_DOXYGEN
 endif

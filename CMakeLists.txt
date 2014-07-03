@@ -177,6 +177,14 @@ LCB_UTIL(lcbht)
 ADD_SUBDIRECTORY(src/vbucket)
 ADD_SUBDIRECTORY(contrib/cbsasl)
 ADD_SUBDIRECTORY(src/ssl)
+IF(NOT WIN32)
+    ADD_SUBDIRECTORY(src/mt)
+    LCB_UTIL(lcbmt)
+    SET(lcb_mt_libs $<TARGET_OBJECTS:lcbmt>)
+ELSE()
+    MESSAGE(STATUS "MT Support not available for Windows")
+    SET(lcb_mt_libs "")
+ENDIF()
 
 IF(LCB_NO_SSL)
     MESSAGE(STATUS "SSL support will be disabled")
@@ -196,6 +204,7 @@ SET(LCB_OPFILES
 
 ADD_LIBRARY(couchbase ${_lcb_linkspec}
             ${LCB_OPFILES}
+            ${lcb_mt_libs}
             src/bootstrap.c
             src/bucketconfig/bc_cccp.c
             src/bucketconfig/bc_http.c

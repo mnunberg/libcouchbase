@@ -11,7 +11,13 @@ ADD_EXECUTABLE(cbc-pillowfight cbc-pillowfight.cc)
 SET_PROPERTY(TARGET cbc-pillowfight PROPERTY DEBUG_OUTPUT_NAME "cbc-pillowfight_d")
 TARGET_LINK_LIBRARIES(cbc-pillowfight couchbase lcbtools)
 
-INSTALL(TARGETS cbc cbc-pillowfight RUNTIME
-    DESTINATION bin)
+IF(NOT WIN32)
+    ADD_EXECUTABLE(cbc-mtbench cbc-mtbench.cc)
+    TARGET_LINK_LIBRARIES(cbc-mtbench couchbase lcbtools)
+    ADD_EXECUTABLE(cbc-mtwrap cbc-mtwrap.cc)
+    TARGET_LINK_LIBRARIES(cbc-mtwrap couchbase lcbtools)
+ENDIF()
+
+INSTALL(TARGETS cbc cbc-pillowfight RUNTIME DESTINATION bin)
 INSTALL_PDBS(cbc)
 INSTALL_PDBS(cbc-pillowfight)

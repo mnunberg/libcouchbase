@@ -27,12 +27,16 @@ sub add_target {
 }
 
 sub add_target_with_sources {
-    my ($name,$path,$extras) = @_;
+    my ($name,$path,$extras,$exclude) = @_;
     my @srclist = find_srcfiles($path);
     if ($extras) {
         foreach my $extra (@$extras) {
             push @srclist, $extra;
         }
+    }
+    if ($exclude) {
+        # Omit these
+        @srclist = grep { $_ !~ $exclude } @srclist;
     }
     print $ofp "${name}_la_SOURCES = ".fmt_filelist(@srclist) . "\n";
     add_target($name);
@@ -102,7 +106,7 @@ print $ofp "pkginclude_HEADERS = ".fmt_filelist(@PKGINCLUDE_HEADERS)."\n";
 my @LCB_SOURCES = (find_srcfiles("src"), find_srcfiles("plugins/io/select"));
 
 # Filter out libraries we're gonna build later on
-@LCB_SOURCES = grep { $_ !~ m,src/ssl, && $_ !~ m,src/lcbht, } @LCB_SOURCES;
+@LCB_SOURCES = grep { $_ !~ m,src/ssl, && $_ !~ m,src/lcbht, && $_ !~ m,src/mt, } @LCB_SOURCES;
 
 # Filter out generated files
 @LCB_SOURCES = grep { $_ !~ m,src/config.h, && $_ !~ m,src/probes.h, } @LCB_SOURCES;
@@ -137,6 +141,11 @@ add_target_with_sources("libmcreq", "src/mc");
 add_target_with_sources("libnetbuf", "src/netbuf");
 add_target_with_sources("libcliopts", "contrib/cliopts");
 add_target_with_sources("liblcbht", "src/lcbht", [find_srcfiles("contrib/http_parser")]);
+
+print $ofp "if BUILD_LCBMT\n";
+add_target_with_sources("liblcbmt", "src/mt", [], qr,src/plugin/,);
+print $ofp "liblcbmt_la_CPPFLAGS += -pthread\n";
+print $ofp "endif\n";
 
 print $ofp "if HAVE_CXX\nif BUILD_TOOLS\n";
 add_target_with_sources("liblcbtools", "tools/common", [find_srcfiles("contrib/cliopts")]);
