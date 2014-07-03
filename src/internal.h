@@ -62,7 +62,7 @@ extern "C" {
 
 struct lcb_string_st;
 
-struct lcb_callback_st {
+typedef struct lcb_callback_st {
     lcb_RESPCALLBACK v3callbacks[LCB_CALLBACK__MAX];
     lcb_get_callback get;
     lcb_store_callback store;
@@ -84,7 +84,7 @@ struct lcb_callback_st {
     lcb_bootstrap_callback bootstrap;
     lcb_pktfwd_callback pktfwd;
     lcb_pktflushed_callback pktflushed;
-};
+} lcb_CALLBACKTABLE;
 
 struct lcb_confmon_st;
 struct lcb_BOOTSTRAP;
@@ -121,6 +121,7 @@ struct lcb_st {
     lcb_MUTATION_TOKEN *dcpinfo; /**< Mapping of known vbucket to {uuid,seqno} info */
     lcbio_pTIMER dtor_timer; /**< Asynchronous destruction timer */
     int type; /**< Type of connection */
+    void *thrctx; /**< Unused thread context */
 
     #ifdef __cplusplus
     lcb_settings* getSettings() { return settings; }
@@ -206,6 +207,9 @@ lcb__synchandler_return(lcb_t instance);
 
 lcb_RESPCALLBACK
 lcb_find_callback(lcb_t instance, lcb_CALLBACKTYPE cbtype);
+
+lcb_RESPCALLBACK
+lcb_find_callback2(const lcb_CALLBACKTABLE *table, lcb_CALLBACKTYPE type);
 
 /* These two functions exist to allow the tests to keep the loop alive while
  * scheduling other operations asynchronously */

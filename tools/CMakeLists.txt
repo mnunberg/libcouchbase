@@ -16,6 +16,12 @@ ADD_EXECUTABLE(cbc-n1qlback cbc-n1qlback.cc
     $<TARGET_OBJECTS:lcbtools> $<TARGET_OBJECTS:cliopts>)
 TARGET_LINK_LIBRARIES(cbc-n1qlback couchbase)
 
+ADD_EXECUTABLE(cbc-mtbench cbc-mtbench.cc $<TARGET_OBJECTS:lcbtools> $<TARGET_OBJECTS:cliopts>)
+TARGET_LINK_LIBRARIES(cbc-mtbench couchbase)
+ADD_EXECUTABLE(cbc-mtwrap cbc-mtwrap.cc $<TARGET_OBJECTS:lcbtools> $<TARGET_OBJECTS:cliopts>)
+TARGET_LINK_LIBRARIES(cbc-mtwrap couchbase)
+
+
 INSTALL(TARGETS cbc cbc-pillowfight cbc-n1qlback
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

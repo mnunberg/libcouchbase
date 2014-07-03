@@ -369,15 +369,24 @@ nocb_fallback(lcb_t instance, int type, const lcb_RESPBASE *response)
 {
     (void)instance; (void)type; (void)response;
 }
+
 lcb_RESPCALLBACK
-lcb_find_callback(lcb_t instance, lcb_CALLBACKTYPE cbtype)
+lcb_find_callback2(const lcb_CALLBACKTABLE *table, lcb_CALLBACKTYPE type)
 {
-    lcb_RESPCALLBACK ret = instance->callbacks.v3callbacks[cbtype];
+    lcb_RESPCALLBACK ret = table->v3callbacks[type];
     if (!ret) {
-        ret = instance->callbacks.v3callbacks[LCB_CALLBACK_DEFAULT];
+        ret = table->v3callbacks[LCB_CALLBACK_DEFAULT];
         if (!ret) {
             ret = nocb_fallback;
         }
     }
     return ret;
+
+}
+
+
+lcb_RESPCALLBACK
+lcb_find_callback(lcb_t instance, lcb_CALLBACKTYPE cbtype)
+{
+    return lcb_find_callback2(&instance->callbacks, cbtype);
 }

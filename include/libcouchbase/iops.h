@@ -982,7 +982,8 @@ typedef enum {
     LCB_IO_OPS_LIBEV = 0x04,
     LCB_IO_OPS_SELECT = 0x05,
     LCB_IO_OPS_WINIOCP = 0x06,
-    LCB_IO_OPS_LIBUV = 0x07
+    LCB_IO_OPS_LIBUV = 0x07,
+    LCB_IO_OPS_MT = 0x08
 } lcb_io_ops_type_t;
 
 /** @brief IO Creation for builtin plugins */

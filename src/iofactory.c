@@ -96,6 +96,8 @@ static plugin_info builtin_plugins[] = {
 
     BUILTIN_DL("libev", LCB_IO_OPS_LIBEV),
     BUILTIN_DL("libuv", LCB_IO_OPS_LIBUV),
+    BUILTIN_DL("mtio", LCB_IO_OPS_MT),
+
 
     { NULL, LCB_IO_OPS_INVALID, NULL, NULL, NULL, { 0 }, { 0 } }
 };

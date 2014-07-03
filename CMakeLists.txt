@@ -225,6 +225,9 @@ ADD_SUBDIRECTORY(contrib/cbsasl)
 ADD_SUBDIRECTORY(contrib/cliopts)
 ADD_SUBDIRECTORY(src/ssl)
 ADD_SUBDIRECTORY(contrib/lcb-jsoncpp)
+ADD_SUBDIRECTORY(src/mt)
+SET(lcb_mt_objs $<TARGET_OBJECTS:lcbmt>)
+
 IF(LCB_BUILD_EXAMPLES)
     ADD_SUBDIRECTORY(example)
 ENDIF()
@@ -270,7 +273,8 @@ SET(LCB_CORE_OBJS
     $<TARGET_OBJECTS:lcb_jsoncpp>
     ${LCB_DTRACE_OBJECT}
     ${lcb_plat_objs}
-    ${lcb_ssl_objs})
+    ${lcb_ssl_objs}
+    ${lcb_mt_objs})
 
 ADD_LIBRARY(couchbaseS STATIC ${LCB_CORE_OBJS})
 ADD_LIBRARY(couchbase ${_lcb_linkspec} ${LCB_CORE_OBJS} ${PROJECT_BINARY_DIR}/dllversion.rc)
