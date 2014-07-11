@@ -74,7 +74,7 @@ ${ltname}_LDFLAGS =
 ${ltname}_CFLAGS = \$(AM_NOWARN_CFLAGS)
 ${ltname}_CXXFLAGS = \$(AM_NOWARN_CXXFLAGS)
 ${ltname}_CPPFLAGS = \$(AM_NOWARN_CPPFLAGS) -I\$(GTEST_ROOT)
-${ltname}_CPPFLAGS += -I\$(GTEST_ROOT)/include -Itests \$(NO_WERROR)
+${ltname}_CPPFLAGS += -I\$(GTEST_ROOT)/include -I\$(top_srcdir)/tests \$(NO_WERROR)
 EOF
     print $ofp $TEST_POSTAMBLE;
 }
