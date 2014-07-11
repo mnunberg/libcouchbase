@@ -100,7 +100,13 @@ my %tmp = map { $_ => 1 } @PKGINCLUDE_HEADERS;
 
 print $ofp "pkginclude_HEADERS = ".fmt_filelist(@PKGINCLUDE_HEADERS)."\n";
 my @LCB_SOURCES = (find_srcfiles("src"), find_srcfiles("plugins/io/select"));
+
+# Filter out libraries we're gonna build later on
 @LCB_SOURCES = grep { $_ !~ m,src/ssl, && $_ !~ m,src/lcbht, } @LCB_SOURCES;
+
+# Filter out generated files
+@LCB_SOURCES = grep { $_ !~ m,src/config.h, && $_ !~ m,src/probes.h, } @LCB_SOURCES;
+
 print $ofp "libcouchbase_la_SOURCES += ".fmt_filelist(@LCB_SOURCES)."\n";
 print $ofp "libcouchbase_la_SOURCES += ".fmt_filelist(find_srcfiles("contrib/cJSON"))."\n";
 print $ofp "libcouchbase_la_SOURCES += ".fmt_filelist(find_srcfiles("include/memcached"))."\n";
