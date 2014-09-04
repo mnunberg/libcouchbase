@@ -33,7 +33,7 @@
 
 typedef enum {
     /* There are no known errored commands on this server */
-    S_CLEAN,
+    S_CLEAN = 0,
 
     /* In the process of draining remaining commands to be flushed. The commands
      * being drained may have already been rescheduled to another server or
@@ -55,6 +55,7 @@ static void start_errored_ctx(mc_SERVER *server, mcserver_STATE next_state);
 static void finalize_errored_ctx(mc_SERVER *server);
 static void on_error(lcbio_CTX *ctx, lcb_error_t err);
 static void server_socket_failed(mc_SERVER *server, lcb_error_t err);
+static int apply_server_down(mc_SERVER *server);
 
 static void
 on_flush_ready(lcbio_CTX *ctx)
@@ -334,6 +335,9 @@ maybe_retry(mc_PIPELINE *pipeline, mc_PACKET *pkt, lcb_error_t err)
         /** memcached bucket */
         return 0;
     }
+    if (srv->down) {
+        return 0;
+    }
     if (!lcb_should_retry(srv->settings, pkt, err)) {
         return 0;
     }
@@ -403,7 +407,7 @@ purge_single_server(mc_SERVER *server, lcb_error_t error,
         return affected;
     }
 
-    if (affected || policy == REFRESH_ALWAYS) {
+    if (server->down == 0 && (affected || policy == REFRESH_ALWAYS)) {
         lcb_bootstrap_common(server->instance,
             LCB_BS_REFRESH_THROTTLE|LCB_BS_REFRESH_INCRERR);
     }
@@ -549,6 +553,12 @@ static void
 server_connect(mc_SERVER *server)
 {
     lcbio_pMGRREQ mr;
+
+    if (apply_server_down(server)) {
+        lcb_log(LOGARGS(server, INFO), LOGFMT "Will trigger server_down again. Errors ahead!", LOGID(server));
+        return;
+    }
+
     mr = lcbio_mgr_get(server->instance->memd_sockpool, server->curhost,
                        MCSERVER_TIMEOUT(server), on_connected, server);
     LCBIO_CONNREQ_MKPOOLED(&server->connreq, mr);
@@ -603,6 +613,9 @@ server_free(mc_SERVER *server)
 
     if (server->io_timer) {
         lcbio_timer_destroy(server->io_timer);
+    }
+    if (server->as_senderr) {
+        lcbio_timer_destroy(server->as_senderr);
     }
 
     free(server->curhost);
@@ -731,17 +744,22 @@ start_errored_ctx(mc_SERVER *server, mcserver_STATE next_state)
 static void
 finalize_errored_ctx(mc_SERVER *server)
 {
-    if (server->connctx->npending) {
-        return;
+    /* With lcb_node_chstate(), we don't necessarily have a context here */
+    if (server->connctx != NULL) {
+        if (server->connctx->npending) {
+            return;
+        }
+
+        lcb_log(LOGARGS(server, DEBUG), LOGFMT "Finalizing ctx %p", LOGID(server), (void*)server->connctx);
+
+        /* Always close the existing context. */
+        lcbio_ctx_close(server->connctx, close_cb, NULL);
+        server->connctx = NULL;
+    } else {
+        lcb_log(LOGARGS(server, DEBUG), LOGFMT "Context already closed.", LOGID(server));
     }
 
-    lcb_log(LOGARGS(server, DEBUG), LOGFMT "Finalizing ctx %p", LOGID(server), (void*)server->connctx);
-
-    /* Always close the existing context. */
-    lcbio_ctx_close(server->connctx, close_cb, NULL);
-    server->connctx = NULL;
-
-    /* And pretend to flush any outstanding data. There's nothing pending! */
+    /* Pretend to flush any outstanding data. There's nothing pending! */
     release_unflushed_packets(server);
 
     if (server->state == S_CLOSED) {
@@ -771,5 +789,133 @@ check_closed(mc_SERVER *server)
     }
     lcb_log(LOGARGS(server, INFO), LOGFMT "Got handler after close. Checking pending calls", LOGID(server));
     finalize_errored_ctx(server);
+    return 1;
+}
+
+
+static int
+node_hp_matches(lcbvb_CONFIG *vbc, int index, const char *hpin)
+{
+    size_t i_svc, i_modes;
+    const lcbvb_SVCMODE modes[] = { LCBVB_SVCMODE_PLAIN, LCBVB_SVCMODE_SSL };
+    const lcbvb_SVCTYPE svcs[] = { LCBVB_SVCTYPE_DATA, LCBVB_SVCTYPE_MGMT };
+    for (i_svc = 0; i_svc < 2; i_svc++) {
+        for (i_modes = 0; i_modes < 2; i_modes++) {
+            const char *hp = lcbvb_get_hostport(vbc, index, svcs[i_svc], modes[i_modes]);
+            if (hp != NULL && !strcmp(hp, hpin)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+LIBCOUCHBASE_API
+lcb_error_t
+lcb_node_chstate(lcb_t instance, const char *node, int state, int *oldstate)
+{
+    /* Find the node first */
+    unsigned ii;
+    int scan_ports = 0;
+    int oldstate_s;
+    mc_SERVER* srv = NULL;
+    lcbvb_CONFIG *vbc = LCBT_VBCONFIG(instance);
+
+    if (!oldstate) {
+        oldstate = &oldstate_s;
+    }
+
+    if (strstr(node, ":")) {
+        scan_ports = 1;
+    }
+
+    for (ii = 0; ii < LCBT_NSERVERS(instance); ii++) {
+        mc_SERVER *tmpsrv = LCBT_GET_SERVER(instance, ii);
+        if (scan_ports) {
+            if (node_hp_matches(vbc, ii, node)) {
+                srv = tmpsrv;
+                break;
+            }
+        } else if (!strcmp(tmpsrv->curhost->host, node)) {
+            srv = tmpsrv;
+            break;
+        }
+    }
+
+    if (!srv) {
+        *oldstate = LCB_NODESTATE_INVALID;
+        return LCB_NO_MATCHING_SERVER;
+    }
+
+    *oldstate = srv->down ? LCB_NODESTATE_DOWN : LCB_NODESTATE_UP;
+    if (state == *oldstate) {
+        return LCB_SUCCESS;
+    }
+
+    if (state == LCB_NODESTATE_DOWN) {
+        srv->down = 1;
+        apply_server_down(srv);
+        assert(srv->down);
+    } else if (state == LCB_NODESTATE_UP) {
+        srv->down = 0;
+        if (srv->as_senderr) {
+            lcbio_async_cancel(srv->as_senderr);
+        }
+    } else {
+        return LCB_EINVAL;
+    }
+    return LCB_SUCCESS;
+}
+
+static void
+set_down_async(void *arg)
+{
+    mc_SERVER *server = arg;
+    if (!server->down) {
+        return;
+    }
+    server_socket_failed(server, LCB_NODE_USERDOWN);
+}
+
+/* This function is called once from lcb_node_chstate() and once from
+ * start_connect(). In both cases it will call set_down_async, which as
+ * seen above, simply invokes the standard error handler on the server with
+ * the specified error code. The goal of invoking this function is to simulate
+ * the normal path for handling connection errors in which:
+ *
+ * - Pending commands are failed (and their respective callbacks are invoked with
+ *   an error)
+ *
+ * - The server attempts to 'reconnect' itself. This 'reconnection' is handled
+ *   specially as the existing subsystem already enforces reconnection attempts
+ *   such that a subsequent connection will _only_ be performed once the existing
+ *   connection is completely free (i.e. there is no pending I/O on the existing
+ *   connection).
+ *
+ *   In the case where the node is marked down, we follow this dance until we
+ *   actually try to connect - in that case, start_connect() will check if
+ *   the ->down flag has been set, and then in turn call this function again,
+ *   invoking a kind of low-intensity asynchronous loop.
+ *
+ *   The good thing is that this 'loop' is invoked _only_ when there are pending
+ *   operations, so it will not end up being _too_ resource intensive.
+ *
+ *   Bringing the node back up will simply unset the 'down' flag and the
+ *   connection attempt for the next operation will succeed and the rest of
+ *   the library can proceed as normal.
+ *
+ */
+static int
+apply_server_down(mc_SERVER *server)
+{
+    lcbio_pTABLE iot = server->instance->iotable;
+
+    if (!server->down) {
+        return 0;
+    }
+    if (!server->as_senderr) {
+        server->as_senderr = lcbio_timer_new(iot, server, set_down_async);
+    }
+    lcbio_async_signal(server->as_senderr);
     return 1;
 }
