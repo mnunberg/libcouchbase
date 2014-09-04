@@ -3184,6 +3184,45 @@ lcb_U32 lcb_cntl_getu32(lcb_t instance, int cmd);
 LIBCOUCHBASE_API
 int
 lcb_cntl_exists(int ctl);
+
+/**
+ * @volatile
+ * Constants to be used with lcb_node_chstate() which can be used to modify
+ * the state of a node
+ */
+typedef enum {
+    LCB_NODESTATE_GET = -2, /**< Use to retrieve the status of a node */
+    LCB_NODESTATE_INVALID = -1, /**< Invalid state. If the node does not exist */
+    LCB_NODESTATE_DOWN = 0, /**< Indicate the node is offline */
+    LCB_NODESTATE_UP = 1 /**< Indicate the node is back up */
+} lcb_NODESTATE;
+
+/**
+ * @volatile
+ * Modify the state of a node.
+ *
+ * @details
+ * This function allows an application to instruct the library that a node is
+ * down and should not be contacted, causing any keys routed to that node to be
+ * failed immediately with an error rather than potentially waiting for a TCP
+ * connection to respond.
+ *
+ * @param instance the instance
+ * @param node The hostname or IP of the node. Note that this must match the
+ * hostname or IP of the node as it exists in the cluster and/or the hostname
+ * and/or IP of the node(s) which were specified in the lcb_create() options.
+ * The @ref LCB_NODESTATE_GET may be used to check if a node under the given
+ * name exists.
+ * @param state the new state of the node. Use @ref LCB_NODESTATE_GET to only
+ * retrieve the current status within `oldstate`
+ * @param[out] oldstate optional pointer to be populated with the previous
+ * state of the node.
+ * @return LCB_SUCCESS, or a failure code otherwise.
+ */
+LIBCOUCHBASE_API
+lcb_error_t
+lcb_node_chstate(lcb_t instance, const char *node, int state, int *oldstate);
+
 /**@}*/ /* settings */
 /**@}*/ /* lcbt_info */
 

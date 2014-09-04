@@ -451,7 +451,11 @@ typedef enum {
     /** The server replied that the given mutation has been lost */ \
     X(LCB_MUTATION_LOST, 0x3E, LCB_ERRTYPE_SRVGEN,\
       "The given mutation has been permanently lost due to the node failing " \
-      "before replication")
+      "before replication") \
+    /** The operation failed because it was routed to a node forcefully downed
+     via lcb_node_chstate(). */ \
+    X(LCB_NODE_USERDOWN, 0x3F, LCB_ERRTYPE_NETWORK, \
+      "Node was forcefully set to a down state by the user")
 
 /** Error codes returned by the library. */
 typedef enum {

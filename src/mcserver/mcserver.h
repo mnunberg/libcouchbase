@@ -43,7 +43,10 @@ typedef struct mc_SERVER_st {
     lcb_settings *settings;
 
     /* Defined in mcserver.c */
-    int state;
+    char state;
+
+    /* Whether the node was forced down by a user API */
+    char down;
 
     /** Whether compression is supported */
     short compsupport;
@@ -53,6 +56,9 @@ typedef struct mc_SERVER_st {
 
     /** IO/Operation timer */
     lcbio_pTIMER io_timer;
+
+    /** State change timer */
+    lcbio_pTIMER as_senderr;
 
     lcbio_CTX *connctx;
     lcbio_CONNREQ connreq;
