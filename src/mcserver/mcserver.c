@@ -33,7 +33,7 @@
 
 typedef enum {
     /* There are no known errored commands on this server */
-    S_CLEAN,
+    S_CLEAN = 0,
 
     /* In the process of draining remaining commands to be flushed. The commands
      * being drained may have already been rescheduled to another server or
@@ -55,6 +55,7 @@ static void start_errored_ctx(mc_SERVER *server, mcserver_STATE next_state);
 static void finalize_errored_ctx(mc_SERVER *server);
 static void on_error(lcbio_CTX *ctx, lcb_error_t err);
 static void server_socket_failed(mc_SERVER *server, lcb_error_t err);
+static int apply_server_down(mc_SERVER *server);
 
 static void
 on_flush_ready(lcbio_CTX *ctx)
@@ -291,6 +292,9 @@ maybe_retry(mc_PIPELINE *pipeline, mc_PACKET *pkt, lcb_error_t err)
         /** memcached bucket */
         return 0;
     }
+    if (srv->down) {
+        return 0;
+    }
     if (!lcb_should_retry(srv->settings, pkt, err)) {
         return 0;
     }
@@ -360,7 +364,7 @@ purge_single_server(mc_SERVER *server, lcb_error_t error,
         return affected;
     }
 
-    if (affected || policy == REFRESH_ALWAYS) {
+    if (server->down == 0 && (affected || policy == REFRESH_ALWAYS)) {
         lcb_bootstrap_common(server->instance,
             LCB_BS_REFRESH_THROTTLE|LCB_BS_REFRESH_INCRERR);
     }
@@ -475,6 +479,11 @@ static void
 server_connect(mc_SERVER *server)
 {
     lcbio_pMGRREQ mr;
+
+    if (apply_server_down(server)) {
+        return;
+    }
+
     mr = lcbio_mgr_get(server->instance->memd_sockpool, server->curhost,
                        MCSERVER_TIMEOUT(server), on_connected, server);
     LCBIO_CONNREQ_MKPOOLED(&server->connreq, mr);
@@ -542,6 +551,9 @@ server_free(mc_SERVER *server)
 
     if (server->io_timer) {
         lcbio_timer_destroy(server->io_timer);
+    }
+    if (server->as_senderr) {
+        lcbio_timer_destroy(server->as_senderr);
     }
 
     free(server->resthost);
@@ -713,5 +725,77 @@ check_closed(mc_SERVER *server)
     }
     lcb_log(LOGARGS(server, INFO), LOGFMT "Got handler after close. Checking pending calls", LOGID(server));
     finalize_errored_ctx(server);
+    return 1;
+}
+
+static void
+set_down_async(void *arg)
+{
+    mc_SERVER *server = arg;
+    if (!server->down) {
+        return;
+    }
+    server_socket_failed(server, LCB_NODE_USERDOWN);
+}
+
+LIBCOUCHBASE_API
+lcb_error_t
+lcb_node_chstate(lcb_t instance, const char *node, int state, int *oldstate)
+{
+    /* Find the node first */
+    unsigned ii;
+    int oldstate_s;
+    mc_SERVER* srv = NULL;
+
+    if (!oldstate) {
+        oldstate = &oldstate_s;
+    }
+
+    for (ii = 0; ii < LCBT_NSERVERS(instance); ii++) {
+        mc_SERVER *cur = LCBT_GET_SERVER(instance, ii);
+        if (strcmp(node, cur->resthost) && strcmp(node, cur->datahost)) {
+            continue;
+        }
+        srv = cur;
+        break;
+    }
+
+    if (!srv) {
+        *oldstate = LCB_NODESTATE_INVALID;
+        return LCB_NO_MATCHING_SERVER;
+    }
+
+    *oldstate = srv->down ? LCB_NODESTATE_DOWN : LCB_NODESTATE_UP;
+    if (state == *oldstate) {
+        return LCB_SUCCESS;
+    }
+
+    if (state == LCB_NODESTATE_DOWN) {
+        srv->down = 1;
+        apply_server_down(srv);
+        assert(srv->down);
+    } else if (state == LCB_NODESTATE_UP) {
+        srv->down = 0;
+        if (srv->as_senderr) {
+            lcbio_async_cancel(srv->as_senderr);
+        }
+    } else {
+        return LCB_EINVAL;
+    }
+    return LCB_SUCCESS;
+}
+
+static int
+apply_server_down(mc_SERVER *server)
+{
+    lcbio_pTABLE iot = server->instance->iotable;
+
+    if (!server->down) {
+        return 0;
+    }
+    if (!server->as_senderr) {
+        server->as_senderr = lcbio_timer_new(iot, server, set_down_async);
+    }
+    lcbio_async_signal(server->as_senderr);
     return 1;
 }

@@ -1,5 +1,15 @@
 # Release Notes
 
+# .NEXT
+
+* Provide _volatile_ API for modifying a node's state. This API allows a user
+  to mark a node as being 'up' or 'down'. When a node is down, operations routed
+  to it are failed immediately and are not retried, allowing the library to
+  fail quickly in situations where it would otherwise time out awaiting TCP
+  activity
+  * Priority: Major
+  * Issues: [CCBC-505](http://couchbase.com/issues/browse/CCBC-505)
+
 ## 2.4.2 (Sep. 23 2014)
 
 * Mark the `hashkey` fields as being _volatile_.

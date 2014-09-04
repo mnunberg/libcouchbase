@@ -598,3 +598,58 @@ TEST_F(MockUnitTest, testNegativeIndex)
     ASSERT_EQ(1, ni.callCount);
     // That's it
 }
+
+TEST_F(MockUnitTest, testUserUpDown)
+{
+    HandleWrap hw;
+    lcb_t instance;
+    createConnection(hw, instance);
+
+    std::string key("userfail");
+    int ix = -1, vb = -1;
+    lcbvb_map_key(instance->cur_configinfo->vbc, key.c_str(), key.size(), &vb, &ix);
+    ASSERT_NE(-1, ix);
+
+    const char *resthost = lcb_get_node(instance, LCB_NODE_DATA, ix);
+    ASSERT_FALSE(resthost == NULL);
+    int oldstate;
+    lcb_error_t err;
+
+    err = lcb_node_chstate(instance, resthost, LCB_NODESTATE_DOWN, &oldstate);
+    ASSERT_EQ(LCB_SUCCESS, err);
+    ASSERT_EQ(LCB_NODESTATE_UP, oldstate);
+
+    Item itm(key, "value");
+    KVOperation kvo(&itm);
+    kvo.ignoreErrors = true;
+    lcb_log(LOGARGS(instance, DEBUG), "Store #1");
+    kvo.store(instance);
+    ASSERT_EQ(LCB_NODE_USERDOWN, kvo.result.err);
+
+    // Set the node back up
+    err = lcb_node_chstate(instance, resthost, LCB_NODESTATE_UP, &oldstate);
+    ASSERT_EQ(LCB_SUCCESS, err);
+    ASSERT_EQ(LCB_NODESTATE_DOWN, oldstate);
+    kvo.clear();
+    lcb_log(LOGARGS(instance, DEBUG), "Store #2");
+    kvo.store(instance);
+    ASSERT_EQ(LCB_SUCCESS, kvo.result.err);
+
+    // Have a connection to the node. Shut it down
+    err = lcb_node_chstate(instance, resthost, LCB_NODESTATE_DOWN, &oldstate);
+    ASSERT_EQ(LCB_SUCCESS, err);
+    ASSERT_EQ(LCB_NODESTATE_UP, oldstate);
+    kvo.clear();
+    lcb_log(LOGARGS(instance, DEBUG), "Store #3");
+    kvo.store(instance);
+    ASSERT_EQ(LCB_NODE_USERDOWN, kvo.result.err);
+
+    // Bring it back up. This should reconnect the node
+    err = lcb_node_chstate(instance, resthost, LCB_NODESTATE_UP, &oldstate);
+    ASSERT_EQ(LCB_SUCCESS, err);
+    ASSERT_EQ(LCB_NODESTATE_DOWN, oldstate);
+    kvo.clear();
+    lcb_log(LOGARGS(instance, DEBUG), "Store #4");
+    kvo.store(instance);
+    ASSERT_EQ(LCB_SUCCESS, kvo.result.err);
+}

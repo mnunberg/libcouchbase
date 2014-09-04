@@ -401,7 +401,12 @@ typedef enum {
      case of a man-in-the-middle attack, but also of forgetting to supply
      the path to the CA authority to the library. */ \
     X(LCB_SSL_CANTVERIFY, 0x37, LCB_ERRTYPE_FATAL, \
-      "Client could not verify server's certificate")
+      "Client could not verify server's certificate") \
+    \
+    /** The operation failed because it was routed to a node forcefully downed
+     via lcb_node_chstate(). */ \
+    X(LCB_NODE_USERDOWN, 0x38, LCB_ERRTYPE_NETWORK, \
+      "Node was forcefully set to a down state by the user")
 
 /** Error codes returned by the library. */
 typedef enum {
