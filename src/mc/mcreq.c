@@ -459,6 +459,17 @@ mcreq_get_key(const mc_PACKET *packet, const void **key, lcb_size_t *nkey)
     *nkey = packet->kh_span.size - PKT_HDRSIZE(packet);
 }
 
+lcb_U16
+mcreq_get_vbucket(const mc_PACKET *packet)
+{
+    lcb_U16 rv;
+    if (packet->kh_span.size < 8) {
+        return -1;
+    }
+    memcpy(&rv, SPAN_BUFFER(&packet->kh_span) + 6, 2);
+    return htons(rv);
+}
+
 lcb_uint32_t
 mcreq_get_bodysize(const mc_PACKET *packet)
 {
@@ -784,7 +795,9 @@ mcreq_set_fallback_handler(mc_CMDQUEUE *cq, mcreq_fallback_cb handler)
 }
 
 static void
-noop_dumpfn(const void *d, unsigned n, FILE *fp) { (void)d;(void)n;(void)fp; }
+default_dumpfn(const void *d, unsigned n, FILE *fp) {
+    fprintf(fp, "   PKT PAYLOAD: %p, %u bytes\n", d, (unsigned)n);
+}
 
 #define MCREQ_XFLAGS(X) \
     X(KEY_NOCOPY) \
@@ -802,9 +815,10 @@ mcreq_dump_packet(const mc_PACKET *packet, FILE *fp, mcreq_payload_dump_fn dumpf
 {
     const char *indent = "  ";
     const mc_REQDATA *rdata = MCREQ_PKT_RDATA(packet);
+    protocol_binary_request_header hdr;
 
     if (!dumpfn) {
-        dumpfn = noop_dumpfn;
+        dumpfn = default_dumpfn;
     }
     if (!fp) {
         fp = stderr;
@@ -849,11 +863,18 @@ mcreq_dump_packet(const mc_PACKET *packet, FILE *fp, mcreq_payload_dump_fn dumpf
 
     indent = "  ";
     fprintf(fp, "%sNEXT: %p\n", indent, (void *)packet->slnode.next);
-    if (dumpfn != noop_dumpfn) {
-        fprintf(fp, "PACKET CONTENTS:\n");
-    }
 
-    fwrite(SPAN_BUFFER(&packet->kh_span), 1, packet->kh_span.size, fp);
+    fprintf(fp, "HEADER SUMMARY:\n");
+
+    mcreq_read_hdr(packet, &hdr);
+    fprintf(fp, "%sOPCODE: 0x%X\n", indent, hdr.request.opcode);
+    fprintf(fp, "%svBucket: 0x%X\n", indent, hdr.request.vbucket);
+    fprintf(fp, "%sKey Length: %d\n", indent, ntohs(hdr.request.keylen));
+    fprintf(fp, "%sExtras Length: %d\n", indent, hdr.request.extlen);
+    fprintf(fp, "%sBody Length: %d\n", indent, ntohl(hdr.request.bodylen));
+
+    fprintf(fp, "PACKET CONTENTS:\n");
+    dumpfn(SPAN_BUFFER(&packet->kh_span), packet->kh_span.size, fp);
     if (packet->flags & MCREQ_F_HASVALUE) {
         if (packet->flags & MCREQ_F_VALUE_IOV) {
             const lcb_IOV *iovs = packet->u_value.multi.iov;

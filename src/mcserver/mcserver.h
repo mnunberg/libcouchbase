@@ -65,6 +65,7 @@ typedef struct {
 
     /** Request for current connection */
     lcb_host_t *curhost;
+    void *dcpctx;
 } mc_SERVER;
 
 #define MCSERVER_TIMEOUT(c) (c)->settings->operation_timeout
@@ -120,6 +121,9 @@ mcserver_fail_chain(mc_SERVER *server, lcb_error_t err);
 LCB_INTERNAL_API
 int
 mcserver_has_pending(mc_SERVER *server);
+
+int
+mcserver_dcp_read(lcbio_pCTX, mc_SERVER*, rdb_IOROPE*);
 
 #define mcserver_get_host(server) (server)->curhost->host
 #define mcserver_get_port(server) (server)->curhost->port

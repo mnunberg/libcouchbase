@@ -9,6 +9,8 @@
 #include "common/histogram.h"
 #include "cbc-handlers.h"
 #include "connspec.h"
+#include <memcached/protocol_binary.h>
+#include <libcouchbase/dcp.h>
 using namespace cbc;
 
 using std::string;
@@ -1044,6 +1046,20 @@ protected:
     }
 };
 
+class DcpHandler : public Handler {
+public:
+    DcpHandler() : Handler("dcp") {}
+    HANDLER_DESCRIPTION("DCP")
+protected:
+    void run() {
+        Handler::run();
+        lcb_cntl_string(instance, "detailed_errcodes", "1");
+        lcb_cntl_string(instance, "operation_timeout", "1000000.0");
+        lcb_start_dcp(instance);
+        lcb_wait3(instance, LCB_WAIT_NOCHECK);
+    }
+};
+
 static void
 setupHandlers()
 {
@@ -1069,6 +1085,7 @@ setupHandlers()
     handlers_s["view"] = new ViewsHandler();
     handlers_s["connstr"] = new ConnstrHandler();
     handlers_s["write-config"] = new WriteConfigHandler();
+    handlers_s["dcp"] = new DcpHandler();
 
 
 

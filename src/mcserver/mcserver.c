@@ -290,8 +290,11 @@ on_read(lcbio_CTX *ctx, unsigned nb)
     if (check_closed(server)) {
         return;
     }
-
-    while ((rv = try_read(ctx, server, ior)) == PKT_READ_COMPLETE);
+    if (LCBT_SETTING(server->instance, is_dcp)) {
+        while ((rv = mcserver_dcp_read(ctx, server, ior)) == PKT_READ_COMPLETE);
+    } else {
+        while ((rv = try_read(ctx, server, ior)) == PKT_READ_COMPLETE);
+    }
     lcbio_ctx_schedule(ctx);
     lcb_maybe_breakout(server->instance);
 
@@ -331,7 +334,7 @@ maybe_retry(mc_PIPELINE *pipeline, mc_PACKET *pkt, lcb_error_t err)
     if (!lcb_should_retry(srv->settings, pkt, err)) {
         return 0;
     }
-
+    abort();
     newpkt = mcreq_renew_packet(pkt);
     newpkt->flags &= ~MCREQ_STATE_FLAGS;
     lcb_retryq_add(instance->retryq, (mc_EXPACKET *)newpkt, err);

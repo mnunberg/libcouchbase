@@ -639,6 +639,10 @@ mcreq_get_key(const mc_PACKET *packet, const void **key, lcb_size_t *nkey);
 uint32_t
 mcreq_get_bodysize(const mc_PACKET *packet);
 
+/** @brief Returns the vbucket from the request. */
+lcb_U16
+mcreq_get_vbucket(const mc_PACKET *packet);
+
 /**
  * @brief get the total packet size (header+body)
  * @param pkt the packet

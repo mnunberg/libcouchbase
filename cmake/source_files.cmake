@@ -54,6 +54,7 @@ SET(LCB_CORE_SRC
     src/instance.c
     src/mcserver/negotiate.c
     src/mcserver/mcserver.c
+    src/mcserver/dcp.c
     src/newconfig.c
     src/nodeinfo.c
     src/iofactory.c

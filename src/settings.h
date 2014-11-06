@@ -133,6 +133,7 @@ typedef struct lcb_settings_st {
     unsigned refresh_on_hterr : 1;
     unsigned sched_implicit_flush : 1;
     unsigned keep_guess_vbs : 1;
+    unsigned is_dcp : 1;
     unsigned sslopts : 2;
     unsigned ipv6 : 2;
 
@@ -152,6 +153,7 @@ typedef struct lcb_settings_st {
     struct lcb_logprocs_st *logger;
     void (*dtorcb)(const void *);
     void *dtorarg;
+    char *dcpkey;
 } lcb_settings;
 
 LCB_INTERNAL_API
