@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -10,6 +27,7 @@
 #define SEG_RELEASE(seg) (seg)->allocator->s_release((seg)->allocator, seg)
 #define SEG_REALLOC(seg, n) (seg)->allocator->s_realloc((seg)->allocator, seg, n)
 #define ROPE_SALLOC(rope, n) (rope)->allocator->s_alloc((rope)->allocator, n)
+static void wipe_rope(rdb_ROPEBUF *rope);
 
 unsigned
 rdb_rdstart(rdb_IOROPE *ior, nb_IOV *iov, unsigned niov)
@@ -53,6 +71,7 @@ rdb_rdstart(rdb_IOROPE *ior, nb_IOV *iov, unsigned niov)
     return orig_niov - niov;
 }
 
+
 void
 rdb_rdend(rdb_IOROPE *ior, unsigned nr)
 {
@@ -67,6 +86,7 @@ rdb_rdend(rdb_IOROPE *ior, unsigned nr)
         ior->recvd.nused += to_chop;
 
         if (! (nr -= to_chop)) {
+            wipe_rope(&ior->avail);
             return;
         }
     }
@@ -81,6 +101,7 @@ rdb_rdend(rdb_IOROPE *ior, unsigned nr)
         lcb_list_delete(&seg->llnode);
         lcb_list_append(&ior->recvd.segments, &seg->llnode);
         if (! (nr -= to_chop)) {
+            wipe_rope(&ior->avail);
             return;
         }
     }
@@ -185,7 +206,7 @@ rope_consolidate(rdb_ROPEBUF *rope, unsigned nr)
         seg->shflags &= ~RDB_ROPESEG_F_LIB;
     }
 
-    rope->nused -= seg->nused;
+    rope->nused -= newseg->nused;
     nr -= newseg->nused;
 
     LCB_LIST_SAFE_FOR(llcur, llnext, &rope->segments) {
@@ -387,10 +408,10 @@ dump_ropebuf(const rdb_ROPEBUF *buf, FILE *fp)
 void
 rdb_dump(const rdb_IOROPE *ior, FILE *fp)
 {
-    fprintf(fp, "@@ DUMP IOROPE=%p\n", ior);
-    fprintf(fp, "@@ ROPEBUF[AVAIL]=%p\n", &ior->avail);
+    fprintf(fp, "@@ DUMP IOROPE=%p\n", (void*)ior);
+    fprintf(fp, "@@ ROPEBUF[AVAIL]=%p\n", (void*)&ior->avail);
     dump_ropebuf(&ior->avail, fp);
-    fprintf(fp, "@@ ROPEBUF[ACTIVE]=%p\n", &ior->recvd);
+    fprintf(fp, "@@ ROPEBUF[ACTIVE]=%p\n", (void*)&ior->recvd);
     dump_ropebuf(&ior->recvd, fp);
     if (ior->avail.allocator && ior->avail.allocator->dump) {
         ior->avail.allocator->dump(ior->avail.allocator, fp);

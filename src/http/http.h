@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #ifndef LCB_HTTPAPI_H
 #define LCB_HTTPAPI_H
 
@@ -16,13 +33,25 @@ typedef struct {
 } lcb_http_header_t;
 
 typedef enum {
-    /** The request is still ongoing. Callbacks are still active */
+    /**The request is still ongoing. Callbacks are still active.
+     * Note that this essentially means the absence of any flags :) */
     LCB_HTREQ_S_ONGOING = 0,
-    /** The on_complete callback has been invoked */
+
+    /**This flag is set when the on_complete callback has been invoked. This
+     * is used as a marker to prevent us from calling that callback more than
+     * once per request */
     LCB_HTREQ_S_CBINVOKED = 1 << 0,
-    /** The object has been purged from either its servers' or instances'
-     * hashset. */
-    LCB_HTREQ_S_HTREMOVED = 1 << 1
+
+    /**This flag is set by lcb_http_request_finish, and indicates that the
+     * request is no longer active per se. This means that while the request
+     * may still be valid in memory, it is simply waiting for any pending I/O
+     * operations to close, so the reference count can hit zero. */
+    LCB_HTREQ_S_FINISHED = 1 << 1,
+
+    /** Internal flag used to indicate that finish() should not not attempt
+     * to modify any instance-level globals. This is currently used
+     * from within lcb_destroy() */
+    LCB_HTREQ_S_NOLCB = 1 << 2
 } lcb_http_request_status_t;
 
 struct lcb_http_request_st {
@@ -79,8 +108,7 @@ void
 lcb_http_init_resp(const lcb_http_request_t req, lcb_RESPHTTP *res);
 
 void
-lcb_http_request_finish(lcb_t instance,
-    lcb_http_request_t req, lcb_error_t error);
+lcb_http_request_finish(lcb_t instance, lcb_http_request_t req, lcb_error_t error);
 
 void
 lcb_http_request_decref(lcb_http_request_t req);

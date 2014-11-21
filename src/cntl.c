@@ -141,6 +141,12 @@ HANDLER(compmode_handler) {
 HANDLER(bucketname_handler) {
     RETURN_GET_ONLY(const char*, LCBT_SETTING(instance, bucket))
 }
+HANDLER(schedflush_handler) {
+    RETURN_GET_SET(int, LCBT_SETTING(instance, sched_implicit_flush))
+}
+HANDLER(vbguess_handler) {
+    RETURN_GET_SET(int, LCBT_SETTING(instance, keep_guess_vbs))
+}
 
 HANDLER(get_kvb) {
     struct lcb_cntl_vbinfo_st *vbi = arg;
@@ -343,14 +349,12 @@ HANDLER(console_log_handler) {
     }
 
     procs = LCBT_SETTING(instance, logger);
+    if (!procs) {
+        procs = lcb_init_console_logger();
+    }
     if (procs) {
         /* don't override previous config */
         return LCB_SUCCESS;
-    }
-
-    if (procs == NULL && mode == LCB_CNTL_SET) {
-        procs = lcb_init_console_logger();
-        LCBT_SETTING(instance, logger) = procs;
     }
 
     logger = (struct lcb_CONSOLELOGGER* ) lcb_console_logprocs;
@@ -414,7 +418,9 @@ static ctl_handler handlers[] = {
     retry_backoff_handler, /* LCB_CNTL_RETRY_BACKOFF */
     http_poolsz_handler, /* LCB_CNTL_HTTP_POOLSIZE */
     http_refresh_config_handler, /* LCB_CNTL_HTTP_REFRESH_CONFIG_ON_ERROR */
-    bucketname_handler /* LCB_CNTL_BUCKETNAME */
+    bucketname_handler, /* LCB_CNTL_BUCKETNAME */
+    schedflush_handler, /* LCB_CNTL_SCHED_IMPLICIT_FLUSH */
+    vbguess_handler /* LCB_CNTL_VBGUESS_PERSIST */
 };
 
 /* Union used for conversion to/from string functions */
@@ -444,10 +450,10 @@ static lcb_error_t convert_timeout(const char *arg, u_STRCONVERT *u) {
     unsigned long tmp;
     if (strchr(arg, '.')) {
         /* Parse as a float */
-        float ftmp;
-        rv = sscanf(arg, "%f", &ftmp);
+        double dtmp;
+        rv = sscanf(arg, "%lf", &dtmp);
         if (rv != 1) { return LCB_ECTL_BADARG; }
-        tmp = ftmp * 1000000;
+        tmp = dtmp * (double) 1000000;
     } else {
         rv = sscanf(arg, "%lu", &tmp);
         if (rv != 1) { return LCB_ECTL_BADARG; }
@@ -480,6 +486,13 @@ static lcb_error_t convert_int(const char *arg, u_STRCONVERT *u) {
 
 static lcb_error_t convert_u32(const char *arg, u_STRCONVERT *u) {
     return convert_timeout(arg, u);
+}
+static lcb_error_t convert_float(const char *arg, u_STRCONVERT *u) {
+    double d;
+    int rv = sscanf(arg, "%lf", &d);
+    if (rv != 1) { return LCB_ECTL_BADARG; }
+    u->f = d;
+    return LCB_SUCCESS;
 }
 
 static lcb_error_t convert_SIZE(const char *arg, u_STRCONVERT *u) {
@@ -547,6 +560,9 @@ static cntl_OPCODESTRS stropcode_map[] = {
         {"http_urlmode", LCB_CNTL_HTCONFIG_URLTYPE, convert_int },
         {"sync_dtor", LCB_CNTL_SYNCDESTROY, convert_intbool },
         {"_reinit_connstr", LCB_CNTL_REINIT_CONNSTR },
+        {"retry_backoff", LCB_CNTL_RETRY_BACKOFF, convert_float },
+        {"http_poolsize", LCB_CNTL_HTTP_POOLSIZE, convert_SIZE },
+        {"vbguess_persist", LCB_CNTL_VBGUESS_PERSIST, convert_intbool },
         {NULL, -1}
 };
 

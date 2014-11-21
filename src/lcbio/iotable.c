@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #define LCB_IOPS_V12_NO_DEPRECATE
 #include <stdlib.h>
 #include <stdio.h>
@@ -134,6 +151,13 @@ R_1to3_read(lcb_io_opt_t io, lcb_sockdata_t *sd, lcb_IOV *iov, lcb_size_t niov,
     return rv;
 }
 
+static int dummy_bsd_chkclosed(lcb_io_opt_t io, lcb_socket_t s, int f) {
+    (void)io; (void)s; (void)f; return LCB_IO_SOCKCHECK_STATUS_UNKNOWN;
+}
+static int dummy_comp_chkclosed(lcb_io_opt_t io, lcb_sockdata_t* s, int f) {
+    (void)io; (void)s; (void)f; return LCB_IO_SOCKCHECK_STATUS_UNKNOWN;
+}
+
 static int
 init_v2_table(lcbio_TABLE *table, lcb_io_opt_t io)
 {
@@ -156,6 +180,14 @@ init_v2_table(lcbio_TABLE *table, lcb_io_opt_t io)
         }
         lcb_assert(table->u_io.completion.read2);
         lcb_assert(table->u_io.completion.write2);
+    }
+
+    if (table->model == LCB_IOMODEL_COMPLETION && IOT_V1(table).is_closed == NULL) {
+        IOT_V1(table).is_closed = dummy_comp_chkclosed;
+    }
+
+    if (table->model == LCB_IOMODEL_EVENT && IOT_V0IO(table).is_closed == NULL) {
+        IOT_V0IO(table).is_closed = dummy_bsd_chkclosed;
     }
 
     return 0;
@@ -202,6 +234,7 @@ lcbio_table_new(lcb_io_opt_t io)
         bsd->recvv = io->v.v0.recvv;
         bsd->send = io->v.v0.send;
         bsd->sendv = io->v.v0.sendv;
+        bsd->is_closed = dummy_bsd_chkclosed;
 
     } else {
         lcb_completion_procs *cp = &table->u_io.completion;
@@ -216,6 +249,7 @@ lcbio_table_new(lcb_io_opt_t io)
         cp->nameinfo = io->v.v1.get_nameinfo;
         cp->write2 = W_1to3_write;
         cp->read2 = R_1to3_read;
+        cp->is_closed = dummy_comp_chkclosed;
     }
 
     return table;

@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include "manager.h"
 #include "hostlist.h"
 #include "iotable.h"
@@ -359,10 +376,24 @@ lcbio_mgr_get(lcbio_MGR *pool, lcb_host_t *dest, uint32_t timeout,
     }
 
     req->host = he;
-    cur = lcb_clist_pop(&he->ll_idle);
 
+    GT_POPAGAIN:
+
+    cur = lcb_clist_pop(&he->ll_idle);
     if (cur) {
+        int clstatus;
         mgr_CINFO *info = LCB_LIST_ITEM(cur, mgr_CINFO, llnode);
+
+        clstatus = lcbio_is_netclosed(info->sock, LCB_IO_SOCKCHECK_PEND_IS_ERROR);
+
+        if (clstatus == LCB_IO_SOCKCHECK_STATUS_CLOSED) {
+            lcb_log(LOGARGS(pool, WARN), HE_LOGFMT "Pooled socket is dead. Continuing to next one", HE_LOGID(he));
+
+            /* Set to CS_LEASED, since it's not inside any of our lists */
+            info->state = CS_LEASED;
+            destroy_cinfo(info);
+            goto GT_POPAGAIN;
+        }
 
         lcbio_timer_disarm(info->idle_timer);
         req->sock = info->sock;

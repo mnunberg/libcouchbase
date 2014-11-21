@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #ifndef LCB_MCREQ_H
 #define LCB_MCREQ_H
 
@@ -20,7 +37,7 @@ extern "C" {
  */
 
 /**
- * @defgroup MCREQ Memcached Packets
+ * @defgroup mcreq Memcached Packets
  *
  * @brief
  * This module defines the core routines which are used to construct, handle,
@@ -110,7 +127,7 @@ extern "C" {
  * create a copy of the packet, keeping the previous packet in tact, but
  * returning a copy of the packet as the 'primary' version.
  *
- * @addtogroup MCREQ
+ * @addtogroup mcreq
  * @{
  */
 
@@ -123,7 +140,7 @@ extern "C" {
 /** @brief Constant defining the size of a memcached header */
 #define MCREQ_PKT_BASESIZE 24
 
-/** @brief Embedded user data for a simple request */
+/** @brief Embedded user data for a simple request. */
 typedef struct {
     const void *cookie; /**< User pointer to place in callbacks */
     hrtime_t start; /**< Time of the initial request. Used for timeouts */
@@ -132,32 +149,40 @@ typedef struct {
 struct mc_packet_st;
 struct mc_pipeline_st;
 
-/**
- * Callback to be invoked for "Extended" packet handling. This is only
- * available in the mc_REQDATAEX structure
- * @param pipeline the pipeline on which the response was received
- * @param pkt the request packet
- * @param rc the error code for the response
- * @param arg opaque pointer for callback
- */
-typedef void (*mcreq_pktex_callback)
-        (struct mc_pipeline_st *pipeline, struct mc_packet_st *pkt,
-                lcb_error_t rc, const void *res);
+/** This structure serves as a kind of 'vtable' for the mc_REQDATAEX structure. */
+typedef struct {
+    /**
+     * Callback to be invoked for "Extended" packet handling. This is only
+     * available in the mc_REQDATAEX structure
+     * @param pipeline the pipeline on which the response was received
+     * @param pkt the request packet
+     * @param rc the error code for the response
+     * @param arg opaque pointer for callback
+     */
+    void (*handler)(struct mc_pipeline_st *pipeline,
+            struct mc_packet_st *pkt, lcb_error_t rc, const void *res);
 
-/**
- * Destructor function called from within mcreq_sched_fail() for packets with
- * extended data. This function should suitably free the data for the packet,
- * if any.
- * @param pkt The packet being unscheduled.
- */
-typedef void (*mcreq_pktex_dtorcb)(struct mc_packet_st *pkt);
+    /**
+     * Destructor function called from within mcreq_sched_fail() for packets with
+     * extended data. This function should suitably free the data for the packet,
+     * if any.
+     * @param pkt The packet being unscheduled.
+     */
+    void (*fail_dtor)(struct mc_packet_st *pkt);
+} mc_REQDATAPROCS;
 
-/** @brief Allocated user data for an extended request. */
+/**@brief Allocated user data for an extended request.
+ *
+ * @details
+ * An extended request is typically used by commands which have more complex
+ * handling requirements, such as mapping a single user API call to multiple
+ * packets, or when the packet itself is generated internally rather than
+ * on behalf of an API request.
+ */
 typedef struct {
     const void *cookie; /**< User data */
     hrtime_t start; /**< Start time */
-    mcreq_pktex_callback callback; /**< Callback to invoke upon being handled */
-    mcreq_pktex_dtorcb dtor; /**< Destructor for failed scheduling */
+    mc_REQDATAPROCS *procs; /**< Common routines for the packet */
 } mc_REQDATAEX;
 
 /**

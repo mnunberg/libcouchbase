@@ -9,15 +9,42 @@
 `cbc-pillowfight` creates a specified number of threads each looping and
 performing get and set operations within the cluster.
 
+The stress test operates in the following order
 
-The command will loop a certain number of _cycles_, in each cycle it will
-schedule a certain number of _batched_ operations (which can be a single
-operation). The operations will be either storage or retrieval operations,
-controlled by a given _ratio_.
+1. It will pre-load the items in the cluster (set by the `--num-items` option)
 
-The number of total items operated upon as well as the sizes of these options
-may also be configured.
+2. Once the items are all loaded into the cluster, it will access all the items
+(within the `--num-items`) specification, using a combination of storage and
+retrieval operations (the proportion of retrieval and storage operations are
+controlled via the `--set-pct` option).
 
+3. Operations are scheduled in _batches_. The batches represent a single pipeline
+(or network buffer) which is filled with a certain amount of operations (see the
+`--batch-size` option). These batch sizes are then sent over to the cluster and
+the requests are serviced by it.
+
+
+### Tuning
+
+Getting the right benchmark numbers highly depends on the type of environment
+the client is being run in. The following provides some information about
+specific settings which may make `pillowfight` generate more operations.
+
+* Increasing the batch size will typically speed up operations, but increasing
+  the batch size too much will actually slow it down. Additionally, very high
+  batch sizes will cause high memory usage.
+
+* Adding additional threads will create additional client objects and connections,
+  potentially increasing performance. Adding too many threads will cause local
+  and network resource congestion.
+
+* Decreasing the item sizes (the `--min-size` and `--max-size` options) will
+  always yield higher performance in terms of operationd-per-second.
+
+* Limiting the working set (i.e. `--num-items`) will decrease the working set
+  within the cluster, thereby increasing the chance that a given item will be
+  inside the server's CPU cache (which is extremely fast), rather than in main
+  memory (slower), or disk (much slower)
 
 ## OPTIONS
 
@@ -26,7 +53,7 @@ Options may be read either from the command line, or from a configuration file
 
 The following options control workload generation:
 
-* `-B`, `--iterations`=_BATCHSIZE_:
+* `-B`, `--batch-size`=_BATCHSIZE_:
   This controls how many commands are scheduled per cycles. To simulate one operation
   at a time, set this value to 1.
 
@@ -67,6 +94,16 @@ The following options control workload generation:
   Specify the number of times the workload should cycle. During each cycle
   an amount of `--batch-size` operations are executed. Setting this to `-1`
   will cause the workload to run infinitely.
+
+* `--sequential`:
+  Specify that the access pattern should be done in a sequential manner. This
+  is useful for bulk-loading many documents in a single server.
+
+* `--start-at`:
+  This specifies the starting offset for the items. The items by default are
+  generated with the key prefix (`--key-prefix`) up to the number of items
+  (`--num-items`). The `--start-at` value will increase the lower limit of
+  the items. This is useful to resume a previously cancelled load operation.
 
 * `-T`, `--timings`:
   Dump a histogram of command timings and latencies to the screen every second.

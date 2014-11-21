@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include <ep-engine/command_ids.h>
 #include "internal.h"
 #include "packetutils.h"
@@ -225,7 +242,7 @@ H_getreplica(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     }
 
     maybe_decompress(instance, response, &resp, &freeptr);
-    rd->callback(pipeline, request, resp.rc, &resp);
+    rd->procs->handler(pipeline, request, resp.rc, &resp);
     free(freeptr);
 }
 
@@ -256,7 +273,7 @@ H_observe(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
 
     if (resp.rc != LCB_SUCCESS) {
         if (! (request->flags & MCREQ_F_INVOKED)) {
-            rd->callback(pipeline, request, resp.rc, NULL);
+            rd->procs->handler(pipeline, request, resp.rc, NULL);
         }
         return;
     }
@@ -302,7 +319,7 @@ H_observe(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
         resp.ttr = 0;
         TRACE_OBSERVE_PROGRESS(response, &resp);
         if (! (request->flags & MCREQ_F_INVOKED)) {
-            rd->callback(pipeline, request, resp.rc, &resp);
+            rd->procs->handler(pipeline, request, resp.rc, &resp);
         }
     }
     TRACE_OBSERVE_END(response);
@@ -370,7 +387,7 @@ H_stats(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     if (resp.rc != LCB_SUCCESS || PACKET_NKEY(response) == 0) {
         /* Call the handler without a response, this indicates that this server
          * has finished responding */
-        exdata->callback(pipeline, request, resp.rc, NULL);
+        exdata->procs->handler(pipeline, request, resp.rc, NULL);
         return;
     }
 
@@ -381,7 +398,7 @@ H_stats(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
         }
     }
 
-    exdata->callback(pipeline, request, resp.rc, &resp);
+    exdata->procs->handler(pipeline, request, resp.rc, &resp);
 }
 
 static void
@@ -393,7 +410,7 @@ H_verbosity(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     mc_REQDATAEX *exdata = request->u_rdata.exdata;
     MK_ERROR(root, &dummy, response, immerr);
 
-    exdata->callback(pipeline, request, dummy.rc, NULL);
+    exdata->procs->handler(pipeline, request, dummy.rc, NULL);
 }
 
 static void
@@ -412,7 +429,7 @@ H_version(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     }
 
 
-    exdata->callback(pipeline, request, resp.rc, &resp);
+    exdata->procs->handler(pipeline, request, resp.rc, &resp);
 }
 
 static void
@@ -435,7 +452,7 @@ H_flush(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     lcb_RESPFLUSH resp = { 0 };
     mc_REQDATAEX *exdata = request->u_rdata.exdata;
     MK_ERROR(root, &resp, response, immerr);
-    exdata->callback(pipeline, request, resp.rc, &resp);
+    exdata->procs->handler(pipeline, request, resp.rc, &resp);
 }
 
 static void
@@ -458,7 +475,7 @@ H_config(mc_PIPELINE *pipeline, mc_PACKET *request, packet_info *response,
     mc_REQDATAEX *exdata = request->u_rdata.exdata;
     MK_ERROR(pipeline->parent->cqdata, &dummy, response, immerr);
 
-    exdata->callback(pipeline, request, dummy.rc, response);
+    exdata->procs->handler(pipeline, request, dummy.rc, response);
 }
 
 static void

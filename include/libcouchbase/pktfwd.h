@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #ifndef LCB_PKTFWD_H
 #define LCB_PKTFWD_H
 #ifdef __cplusplus
@@ -5,12 +22,12 @@ extern "C" {
 #endif
 
 /**
- * @ingroup LCB_PUBAPI
- * @defgroup LCB_PKTFWD Raw packet forwarding and dispatch routines
+ * @ingroup lcb-public-api
+ * @defgroup lcb-pktfwd Raw packet forwarding and dispatch routines
  * @brief These functions perform packet forwarding functions to send and
  * receive raw packets
  *
- * @addtogroup LCB_PKTFWD
+ * @addtogroup lcb-pktfwd
  * @{
  */
 
@@ -41,6 +58,21 @@ typedef struct {
      * within the header.
      */
     lcb_VALBUF vb;
+
+    /**
+     * Whether to direct this command to a specific server. This should be
+     * set if the packet itself doesn't contain any mapping information; and
+     * should _not_ be used on normal key access commands, since key access
+     * commands should be mapped to the appropriate server via the vbucket
+     * mappet.
+     *
+     * The server should be specified in the #server_index field */
+    char nomap;
+
+    /**
+     * @brief Specify server index for the command.
+     * Only valid if #nomap is specified. */
+    lcb_U16 server_index;
 } lcb_CMDPKTFWD;
 
 /**@brief Response structure containing the response for a packet */

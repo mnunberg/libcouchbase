@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 /**
  * This file contains the common bucket of routines necessary for interfacing
  * with OpenSSL.
@@ -48,6 +65,14 @@ static void cancel_timer(lcb_io_opt_t io, void *timer) {
     lcbio_XSSL *xs = IOTSSL_FROM_IOPS(io);
     xs->orig->timer.cancel(IOT_ARG(xs->orig), timer);
 }
+static int Eis_closed(lcb_io_opt_t io, lcb_socket_t sock, int flags) {
+    lcbio_XSSL *xs = IOTSSL_FROM_IOPS(io);
+    return xs->orig->u_io.v0.io.is_closed(IOT_ARG(xs->orig), sock, flags);
+}
+static int Cis_closed(lcb_io_opt_t io, lcb_sockdata_t *sd, int flags) {
+    lcbio_XSSL *xs = IOTSSL_FROM_IOPS(io);
+    return xs->orig->u_io.completion.is_closed(IOT_ARG(xs->orig), sd, flags);
+}
 
 /******************************************************************************
  ******************************************************************************
@@ -74,6 +99,9 @@ iotssl_init_common(lcbio_XSSL *xs, lcbio_TABLE *orig, SSL_CTX *sctx)
     if (orig->model == LCB_IOMODEL_EVENT) {
         base->u_io.v0.ev.create = create_event;
         base->u_io.v0.ev.destroy = destroy_event;
+        base->u_io.v0.io.is_closed = Eis_closed;
+    } else {
+        base->u_io.completion.is_closed = Cis_closed;
     }
 
     lcbio_table_ref(xs->orig);
@@ -181,12 +209,31 @@ static void
 log_callback(const SSL *ssl, int where, int ret)
 {
     const char *retstr = "";
+    int should_log = 0;
     lcbio_SOCKET *sock = SSL_get_app_data(ssl);
+    /* Ignore low-level SSL stuff */
+
     if (where & SSL_CB_ALERT) {
-        retstr = SSL_alert_type_string(ret);
+        should_log = 1;
     }
+    if (where == SSL_CB_HANDSHAKE_START || where == SSL_CB_HANDSHAKE_DONE) {
+        should_log = 1;
+    }
+    if ((where & SSL_CB_EXIT) && ret == 0) {
+        should_log = 1;
+    }
+
+    if (!should_log) {
+        return;
+    }
+
+    retstr = SSL_alert_type_string(ret);
     lcb_log(LOGARGS(ssl, LCB_LOG_TRACE), "sock=%p: ST(0x%x). %s. R(0x%x)%s",
         (void*)sock, where, SSL_state_string_long(ssl), ret, retstr);
+
+    if (where == SSL_CB_HANDSHAKE_DONE) {
+        lcb_log(LOGARGS(ssl, LCB_LOG_DEBUG), "sock=%p. Using SSL version %s. Cipher=%s", (void*)sock, SSL_get_version(ssl), SSL_get_cipher_name(ssl));
+    }
 }
 
 #if 0
@@ -220,7 +267,7 @@ lcbio_ssl_new(const char *cafile, int noverify, lcb_error_t *errp,
         *errp = LCB_CLIENT_ENOMEM;
         goto GT_ERR;
     }
-    ret->ctx = SSL_CTX_new(SSLv3_client_method());
+    ret->ctx = SSL_CTX_new(SSLv23_client_method());
     if (!ret->ctx) {
         *errp = LCB_SSL_ERROR;
         goto GT_ERR;
@@ -253,6 +300,7 @@ lcbio_ssl_new(const char *cafile, int noverify, lcb_error_t *errp,
      * be using the same buffer.
      */
     SSL_CTX_set_mode(ret->ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+    SSL_CTX_set_options(ret->ctx, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3);
     return ret;
 
     GT_ERR:

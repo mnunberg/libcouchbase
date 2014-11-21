@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include "internal.h"
 
 int
@@ -6,6 +23,19 @@ lcb_should_retry(lcb_settings *settings, mc_PACKET *pkt, lcb_error_t err)
     lcb_RETRYCMDOPTS policy;
     lcb_RETRYMODEOPTS mode;
     protocol_binary_request_header hdr;
+
+    mcreq_read_hdr(pkt, &hdr);
+
+    switch (hdr.request.opcode) {
+    /* None of these commands can be 'redistributed' to other servers */
+    case PROTOCOL_BINARY_CMD_GET_REPLICA:
+    case PROTOCOL_BINARY_CMD_FLUSH:
+    case PROTOCOL_BINARY_CMD_OBSERVE:
+    case PROTOCOL_BINARY_CMD_STAT:
+    case PROTOCOL_BINARY_CMD_VERBOSITY:
+    case PROTOCOL_BINARY_CMD_VERSION:
+        return 0;
+    }
 
     if (err == LCB_ETIMEDOUT /* can't exceed */ ||
             err == LCB_MAP_CHANGED /* processed */ ) {
@@ -38,7 +68,6 @@ lcb_should_retry(lcb_settings *settings, mc_PACKET *pkt, lcb_error_t err)
     }
 
     /** read the header */
-    mcreq_read_hdr(pkt, &hdr);
     switch (hdr.request.opcode) {
 
     /* get is a safe operation which may be retried */

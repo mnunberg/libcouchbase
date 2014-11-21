@@ -158,7 +158,12 @@ static int do_set_next(lcb_confmon *mon, clconfig_info *info, int notify_miss)
         lcbvb_free_diff(diff);
 
         if (chstatus == 0 || lcb_clconfig_compare(mon->config, info) >= 0) {
-            lcb_log(LOGARGS(mon, INFO), "Not applying configuration received via %s. No changes detected", provider_string(info->origin));
+            const lcbvb_CONFIG *ca, *cb;
+
+            ca = mon->config->vbc;
+            cb = info->vbc;
+
+            lcb_log(LOGARGS(mon, INFO), "Not applying configuration received via %s. No changes detected. A.rev=%d, B.rev=%d", provider_string(info->origin), ca->revid, cb->revid);
             if (notify_miss) {
                 invoke_listeners(mon, CLCONFIG_EVENT_GOT_ANY_CONFIG, info);
             }
@@ -452,7 +457,7 @@ lcb_confmon_dump(lcb_confmon *mon, FILE *fp)
             continue;
         }
 
-        fprintf(fp, "** PROVIDER: 0x%x (%s) %p\n", cur->type, provider_string(cur->type), cur);
+        fprintf(fp, "** PROVIDER: 0x%x (%s) %p\n", cur->type, provider_string(cur->type), (void*)cur);
         fprintf(fp, "** ENABLED: %s\n", cur->enabled ? "YES" : "NO");
         fprintf(fp, "** CURRENT: %s\n", cur == mon->cur_provider ? "YES" : "NO");
         if (cur->dump) {

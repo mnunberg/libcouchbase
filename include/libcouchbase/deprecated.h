@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #ifndef LCB_DEPRECATED_H
 #define LCB_DEPRECATED_H
 #ifndef LIBCOUCHBASE_COUCHBASE_H
@@ -212,6 +229,19 @@ lcb_error_t lcb_verify_struct_size(lcb_uint32_t id, lcb_uint32_t version,
 #define lcb_is_error_enomem(a) ((a == LCB_CLIENT_ENOMEM) || (a == LCB_ENOMEM))
 /**@deprecated - Use error classifiers */
 #define lcb_is_error_etmpfail(a) ((a == LCB_CLIENT_ETMPFAIL) || (a == LCB_ETMPFAIL))
+
+typedef enum {
+    LCB_CONFIGURATION_NEW = 0x00,
+    LCB_CONFIGURATION_CHANGED = 0x01,
+    LCB_CONFIGURATION_UNCHANGED = 0x02
+} lcb_configuration_t;
+
+typedef void (*lcb_configuration_callback)(lcb_t instance, lcb_configuration_t config);
+
+/**@deprecated - Use lcb_set_bootstrap_callback() */
+LCB_DEPR_API2(
+    lcb_configuration_callback lcb_set_configuration_callback(lcb_t, lcb_configuration_callback),
+    "use lcb_set_bootstrap_callback() to determine when client is ready");
 
 #ifdef __cplusplus
 }

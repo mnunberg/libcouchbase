@@ -186,7 +186,7 @@ setup_ssl(lcb_t obj, lcb_CONNSPEC *params)
     char optbuf[4096];
     int env_policy = -1;
     lcb_settings *settings = obj->settings;
-    lcb_error_t err;
+    lcb_error_t err = LCB_SUCCESS;
 
     if (lcb_getenv_nonempty("LCB_SSL_CACERT", optbuf, sizeof optbuf)) {
         lcb_log(LOGARGS(obj, INFO), "SSL CA certificate %s specified on environment", optbuf);
@@ -475,9 +475,9 @@ void lcb_destroy(lcb_t instance)
     }
 
     if ((hs = lcb_aspend_get(po, LCB_PENDTYPE_DURABILITY))) {
-        struct lcb_durability_set_st **dset_list;
+        struct lcb_DURSET_st **dset_list;
         lcb_size_t nitems = hashset_num_items(hs);
-        dset_list = (struct lcb_durability_set_st **)hashset_get_items(hs, NULL);
+        dset_list = (struct lcb_DURSET_st **)hashset_get_items(hs, NULL);
         if (dset_list) {
             for (ii = 0; ii < nitems; ii++) {
                 lcb_durability_dset_destroy(dset_list[ii]);
@@ -496,13 +496,8 @@ void lcb_destroy(lcb_t instance)
             if (hs->items[ii] > 1) {
                 lcb_http_request_t htreq = (lcb_http_request_t)hs->items[ii];
 
-                /**
-                 * We don't want to invoke callbacks *or* remove it from our
-                 * hash table
-                 */
-                htreq->status |= LCB_HTREQ_S_CBINVOKED | LCB_HTREQ_S_HTREMOVED;
-
-                /* we should figure out a better error code for this.. */
+                /* Prevents lcb's globals from being modified during destruction */
+                htreq->status |= LCB_HTREQ_S_NOLCB;
                 lcb_http_request_finish(instance, htreq, LCB_ERROR);
             }
         }
@@ -511,6 +506,8 @@ void lcb_destroy(lcb_t instance)
     DESTROY(lcb_confmon_destroy, confmon);
     DESTROY(lcbio_mgr_destroy, memd_sockpool);
     DESTROY(lcbio_mgr_destroy, http_sockpool);
+    DESTROY(lcb_vbguess_destroy, vbguess);
+
     mcreq_queue_cleanup(&instance->cmdq);
     lcb_aspend_cleanup(po);
 
@@ -645,7 +642,7 @@ LIBCOUCHBASE_API
 void
 lcb_sched_leave(lcb_t instance)
 {
-    mcreq_sched_leave(&instance->cmdq, 1);
+    mcreq_sched_leave(&instance->cmdq, LCBT_SETTING(instance, sched_implicit_flush));
 }
 LIBCOUCHBASE_API
 void

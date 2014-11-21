@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include "mcreq.h"
 #include "compress.h"
 #include "sllist-inl.h"
@@ -573,8 +590,8 @@ queuectx_leave(mc_CMDQUEUE *queue, int success, int flush)
             } else {
                 if (pkt->flags & MCREQ_F_REQEXT) {
                     mc_REQDATAEX *rd = pkt->u_rdata.exdata;
-                    if (rd->dtor) {
-                        rd->dtor(pkt);
+                    if (rd->procs->fail_dtor) {
+                        rd->procs->fail_dtor(pkt);
                     }
                 }
                 mcreq_wipe_packet(pipeline, pkt);
@@ -769,6 +786,17 @@ mcreq_set_fallback_handler(mc_CMDQUEUE *cq, mcreq_fallback_cb handler)
 static void
 noop_dumpfn(const void *d, unsigned n, FILE *fp) { (void)d;(void)n;(void)fp; }
 
+#define MCREQ_XFLAGS(X) \
+    X(KEY_NOCOPY) \
+    X(VALUE_NOCOPY) \
+    X(VALUE_IOV) \
+    X(HASVALUE) \
+    X(REQEXT) \
+    X(UFWD) \
+    X(FLUSHED) \
+    X(INVOKED) \
+    X(DETACHED)
+
 void
 mcreq_dump_packet(const mc_PACKET *packet, FILE *fp, mcreq_payload_dump_fn dumpfn)
 {
@@ -784,7 +812,14 @@ mcreq_dump_packet(const mc_PACKET *packet, FILE *fp, mcreq_payload_dump_fn dumpf
 
     fprintf(fp, "Packet @%p\n", (void *)packet);
     fprintf(fp, "%sOPAQUE: %u\n", indent, (unsigned int)packet->opaque);
-    fprintf(fp, "%sPKTFLAGS: 0x%x\n", indent, packet->flags);
+
+    fprintf(fp, "%sPKTFLAGS: 0x%x ", indent, packet->flags);
+    #define X(base) \
+    if (packet->flags & MCREQ_F_##base) { fprintf(fp, "%s, ", #base); }
+    MCREQ_XFLAGS(X)
+    #undef X
+    fprintf(fp, "\n");
+
     fprintf(fp, "%sKey+Header Size: %u\n", indent, (unsigned int)packet->kh_span.size);
     fprintf(fp, "%sKey Offset: %u\n", indent, MCREQ_PKT_BASESIZE + packet->extlen);
 

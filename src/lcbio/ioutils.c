@@ -1,3 +1,20 @@
+/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/*
+ *     Copyright 2014 Couchbase, Inc.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #ifndef _WIN32
 #include <errno.h>
 #endif
@@ -224,6 +241,18 @@ lcbio_get_nameinfo(lcbio_SOCKET *sock, struct lcbio_NAMEINFO *nistrs)
     return 1;
 }
 
+int
+lcbio_is_netclosed(lcbio_SOCKET *sock, int flags)
+{
+    lcbio_pTABLE iot = sock->io;
+
+    if (IOT_IS_EVENT(iot)) {
+        return IOT_V0IO(iot).is_closed(IOT_ARG(iot), sock->u.fd, flags);
+    } else {
+        return IOT_V1(iot).is_closed(IOT_ARG(iot), sock->u.sd, flags);
+    }
+}
+
 void
 lcbio_connreq_cancel(lcbio_CONNREQ *req)
 {
@@ -250,4 +279,13 @@ lcbio_ssl_supported(void)
 #else
     return 1;
 #endif
+}
+
+void*
+lcbio_ssl_new__fallback(const char *ca, int noverify, lcb_error_t *errp,
+    lcb_settings *settings)
+{
+    (void)ca; (void)noverify; (void)settings;
+    if (errp) { *errp = LCB_CLIENT_FEATURE_UNAVAILABLE; }
+    return NULL;
 }
