@@ -771,15 +771,6 @@ check_closed(mc_SERVER *server)
     return 1;
 }
 
-static void
-set_down_async(void *arg)
-{
-    mc_SERVER *server = arg;
-    if (!server->down) {
-        return;
-    }
-    server_socket_failed(server, LCB_NODE_USERDOWN);
-}
 
 LIBCOUCHBASE_API
 lcb_error_t
@@ -828,6 +819,44 @@ lcb_node_chstate(lcb_t instance, const char *node, int state, int *oldstate)
     return LCB_SUCCESS;
 }
 
+static void
+set_down_async(void *arg)
+{
+    mc_SERVER *server = arg;
+    if (!server->down) {
+        return;
+    }
+    server_socket_failed(server, LCB_NODE_USERDOWN);
+}
+
+/* This function is called once from lcb_node_chstate() and once from
+ * start_connect(). In both cases it will call set_down_async, which as
+ * seen above, simply invokes the standard error handler on the server with
+ * the specified error code. The goal of invoking this function is to simulate
+ * the normal path for handling connection errors in which:
+ *
+ * - Pending commands are failed (and their respective callbacks are invoked with
+ *   an error)
+ *
+ * - The server attempts to 'reconnect' itself. This 'reconnection' is handled
+ *   specially as the existing subsystem already enforces reconnection attempts
+ *   such that a subsequent connection will _only_ be performed once the existing
+ *   connection is completely free (i.e. there is no pending I/O on the existing
+ *   connection).
+ *
+ *   In the case where the node is marked down, we follow this dance until we
+ *   actually try to connect - in that case, start_connect() will check if
+ *   the ->down flag has been set, and then in turn call this function again,
+ *   invoking a kind of low-intensity asynchronous loop.
+ *
+ *   The good thing is that this 'loop' is invoked _only_ when there are pending
+ *   operations, so it will not end up being _too_ resource intensive.
+ *
+ *   Bringing the node back up will simply unset the 'down' flag and the
+ *   connection attempt for the next operation will succeed and the rest of
+ *   the library can proceed as normal.
+ *
+ */
 static int
 apply_server_down(mc_SERVER *server)
 {
