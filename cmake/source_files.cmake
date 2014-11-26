@@ -52,6 +52,7 @@ SET(LCB_CORE_SRC
     src/http/http.c
     src/http/http_io.c
     src/instance.c
+    src/irqfd.c
     src/mcserver/negotiate.c
     src/mcserver/mcserver.c
     src/newconfig.c

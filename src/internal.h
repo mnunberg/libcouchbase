@@ -106,6 +106,7 @@ struct lcb_st {
     struct lcb_GUESSVB_st *vbguess; /**< Heuristic masters for vbuckets */
     lcbio_pTIMER dtor_timer; /**< Asynchronous destruction timer */
     int type; /**< Type of connection */
+    void *irqfd; /**< Special file descriptor for interrupts */
 
     #ifdef __cplusplus
     lcb_settings* getSettings() { return settings; }
