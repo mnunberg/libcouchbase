@@ -518,6 +518,7 @@ server_connect(mc_SERVER *server)
     lcbio_pMGRREQ mr;
 
     if (apply_server_down(server)) {
+        lcb_log(LOGARGS(server, INFO), LOGFMT "Will trigger server_down again. Errors ahead!", LOGID(server));
         return;
     }
 
@@ -722,17 +723,22 @@ start_errored_ctx(mc_SERVER *server, mcserver_STATE next_state)
 static void
 finalize_errored_ctx(mc_SERVER *server)
 {
-    if (server->connctx->npending) {
-        return;
+    /* With lcb_node_chstate(), we don't necessarily have a context here */
+    if (server->connctx != NULL) {
+        if (server->connctx->npending) {
+            return;
+        }
+
+        lcb_log(LOGARGS(server, DEBUG), LOGFMT "Finalizing ctx %p", LOGID(server), (void*)server->connctx);
+
+        /* Always close the existing context. */
+        lcbio_ctx_close(server->connctx, close_cb, NULL);
+        server->connctx = NULL;
+    } else {
+        lcb_log(LOGARGS(server, DEBUG), LOGFMT "Context already closed.", LOGID(server));
     }
 
-    lcb_log(LOGARGS(server, DEBUG), LOGFMT "Finalizing ctx %p", LOGID(server), (void*)server->connctx);
-
-    /* Always close the existing context. */
-    lcbio_ctx_close(server->connctx, close_cb, NULL);
-    server->connctx = NULL;
-
-    /* And pretend to flush any outstanding data. There's nothing pending! */
+    /* Pretend to flush any outstanding data. There's nothing pending! */
     release_unflushed_packets(server);
 
     if (server->state == S_CLOSED) {
