@@ -1,5 +1,5 @@
 IF(WIN32)
-    ADD_LIBRARY(couchbase_iocp STATIC
+    ADD_LIBRARY(couchbase_iocp OBJECT
         iocp_iops.c
         iocp_loop.c
         iocp_timer.c
