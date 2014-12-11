@@ -538,6 +538,8 @@ mcreq_reserve_key(
         mc_PIPELINE *pipeline, mc_PACKET *packet,
         uint8_t hdrsize, const lcb_KEYBUF *kreq);
 
+lcb_error_t
+mcreq_reserve_blob(mc_PIPELINE *pipeline, mc_PACKET *packet, unsigned size);
 
 /**
  * Initialize the given packet's value structure. Only applicable for storage

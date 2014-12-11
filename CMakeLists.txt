@@ -298,13 +298,15 @@ ENDIF()
 
 SET_TARGET_PROPERTIES(couchbase PROPERTIES PREFIX "lib")
 SET_TARGET_PROPERTIES(couchbase PROPERTIES IMPORT_PREFIX "lib")
-SET(LCB_LINK_DEPS ${lcb_plat_libs} ${lcb_ssl_libs} ${LCB_SNAPPY_LINK})
+SET(LCB_LINK_DEPS ${lcb_plat_libs} ${lcb_ssl_libs} ${LCB_SNAPPY_LINK} protobuf-c)
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     SET(LCB_LINK_DEPS ${LCB_LINK_DEPS} rt)
 ENDIF()
 
 TARGET_LINK_LIBRARIES(couchbase ${LCB_LINK_DEPS})
 TARGET_LINK_LIBRARIES(couchbaseS ${LCB_LINK_DEPS})
+ADD_EXECUTABLE(q2i-test tests/q2i-dummy.cc)
+TARGET_LINK_LIBRARIES(q2i-test couchbase)
 
 ADD_EXECUTABLE(stok_test tests/synctoks.cc)
 TARGET_LINK_LIBRARIES(stok_test couchbase)

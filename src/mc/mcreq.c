@@ -79,6 +79,18 @@ mcreq_reserve_key(
 }
 
 lcb_error_t
+mcreq_reserve_blob(mc_PIPELINE *pipeline, mc_PACKET *packet, unsigned size)
+{
+    int rv;
+    packet->kh_span.size = size;
+    rv = netbuf_mblock_reserve(&pipeline->nbmgr, &packet->kh_span);
+    if (rv != 0) {
+        return LCB_CLIENT_ENOMEM;
+    }
+    return LCB_SUCCESS;
+}
+
+lcb_error_t
 mcreq_reserve_value2(mc_PIPELINE *pl, mc_PACKET *pkt, lcb_size_t n)
 {
     int rv;
@@ -246,7 +258,9 @@ mcreq_allocate_packet(mc_PIPELINE *pipeline)
     ret->alloc_parent = span.parent;
     ret->flags = 0;
     ret->retries = 0;
-    ret->opaque = pipeline->parent->seq++;
+    if (pipeline->parent) {
+        ret->opaque = pipeline->parent->seq++;
+    }
     return ret;
 }
 

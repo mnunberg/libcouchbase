@@ -136,7 +136,14 @@ LCB_INTERNAL_API
 int
 mcserver_has_pending(mc_SERVER *server)
 {
-    return !SLLIST_IS_EMPTY(&server->pipeline.requests);
+    if (!SLLIST_IS_EMPTY(&server->pipeline.requests)) {
+        return 1;
+    }
+    if (server->ixserver) {
+        return mcserver_has_pending(server->ixserver);
+    } else {
+        return 0;
+    }
 }
 
 static void flush_noop(mc_PIPELINE *pipeline) {
@@ -304,7 +311,6 @@ mcserver_base_init(mc_SERVER *server, lcb_t instance, const char *hostport)
 static void
 server_free(mc_SERVER *server)
 {
-    server->procs->clean(server);
     mcreq_pipeline_cleanup(&server->pipeline);
 
     if (server->io_timer) {
@@ -371,6 +377,9 @@ mcserver_close(mc_SERVER *server)
 {
     /* Should never be called twice */
     lcb_assert(server->state != S_CLOSED);
+    if (server->procs->clean) {
+        server->procs->clean(server);
+    }
     start_errored_ctx(server, S_CLOSED);
 }
 

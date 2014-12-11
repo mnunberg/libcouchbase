@@ -66,6 +66,9 @@ typedef struct mc_SERVER_st {
 
     /** Request for current connection */
     lcb_host_t *curhost;
+
+    /** Server for secondary index requests */
+    struct mc_SERVER_st *ixserver;
 } mc_SERVER;
 
 typedef struct mc_SERVER_PROTOFUNCS_st {
@@ -89,8 +92,8 @@ typedef struct mc_SERVER_PROTOFUNCS_st {
     int (*negotiate)(mc_SERVER *, lcbio_SOCKET *);
 
     /**
-     * Callback to clear any structures allocated by this 'subclass'
-     * @param The server to clear
+     * Called when this server is being destroyed. This is called from within
+     * mcserver_close. The implementation should proxy this down the stack.
      */
     void (*clean)(mc_SERVER *);
 
@@ -106,14 +109,15 @@ typedef struct mc_SERVER_PROTOFUNCS_st {
  * Allocate and initialize a new server object. The object will not be
  * connected
  * @param instance the instance to which the server belongs
+ * @param vbc the vbucket configuration
  * @param ix the server index in the configuration
  * @return the new object or NULL on allocation failure.
  */
 mc_SERVER *
-mcserver_alloc(lcb_t instance, unsigned ix);
+mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix);
 
 mc_SERVER *
-mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix);
+mcserver_q2i_alloc(lcb_t instance, const char *hostport);
 
 /* Internal callback for connection completion */
 void

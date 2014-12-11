@@ -1,0 +1,104 @@
+package q2i;
+
+// Error message can be sent back as response or
+// encapsulated in response packets.
+message Error {
+    required string error = 1; // Empty string means success
+}
+
+// Request can be one of the optional field.
+message QueryPayload {
+    required uint32             version           = 1;
+    optional StatisticsRequest  statisticsRequest = 2;
+    optional StatisticsResponse statistics        = 3;
+    optional ScanRequest        scanRequest       = 4;
+    optional ScanAllRequest     scanAllRequest    = 5;
+    optional ResponseStream     stream            = 6;
+    optional CountRequest       countRequest      = 7;
+    optional CountResponse      countResponse     = 8;
+    optional EndStreamRequest   endStream         = 9;
+    optional StreamEndResponse  streamEnd         = 10;
+}
+
+// Get Index statistics. StatisticsResponse is returned back from indexer.
+message StatisticsRequest {
+    required Span   span      = 1;
+    required string indexName = 3;
+    required string bucket    = 4;
+}
+
+message StatisticsResponse {
+    required IndexStatistics stats = 1;
+    optional Error           err   = 2;
+}
+
+// Scan request to indexer.
+message ScanRequest {
+    required Span   span      = 1;
+    required bool   distinct  = 2;
+    required int64  limit     = 3;
+    required int64  pageSize  = 4;
+    required string indexName = 5;
+    required string bucket    = 6;
+}
+
+// Full table scan request from indexer.
+message ScanAllRequest {
+    required int64  pageSize  = 1;
+    required int64  limit     = 2;
+    required string indexName = 3;
+    required string bucket    = 4;
+}
+
+// Request by client to stop streaming the query results.
+message EndStreamRequest {
+}
+
+message ResponseStream {
+    repeated IndexEntry indexEntries = 1;
+    optional Error      err     = 2;
+}
+
+// Last response packet sent by server to end query results.
+message StreamEndResponse {
+    optional Error err = 1;
+}
+
+// Count request to indexer.
+message CountRequest {
+    required string indexName = 1;
+    required string bucket    = 2;
+}
+
+// total number of entries in index.
+message CountResponse {
+    required int64 count = 1;
+    optional Error err   = 2;
+}
+
+// Query messages / arguments for indexer
+
+message Span {
+    optional Range  range = 1;
+    // TODO: may we should rename `equal` to `equals` ?
+    repeated bytes  equal = 2;
+}
+
+message Range {
+    required bytes  low       = 1;
+    required bytes  high      = 2;
+    required uint32 inclusion = 3;
+}
+
+message IndexEntry {
+    required bytes  entryKey   = 1;
+    required bytes  primaryKey = 2;
+}
+
+// Statistics of a given index.
+message IndexStatistics {
+    required uint64 keysCount       = 1;
+    required uint64 uniqueKeysCount = 2;
+    required bytes  keyMin          = 3;
+    required bytes  keyMax          = 4;
+}

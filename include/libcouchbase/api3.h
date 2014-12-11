@@ -236,6 +236,7 @@ typedef enum {
     LCB_CALLBACK_ENDURE, /**< lcb_endure3_ctxnew() */
     LCB_CALLBACK_HTTP, /**< lcb_http3() */
     LCB_CALLBACK_OBSEQNO, /**< For lcb_observe_synctoken3() */
+    LCB_CALLBACK_Q2I, /**< For secondary index lookups */
     LCB_CALLBACK__MAX /* Number of callbacks */
 } lcb_CALLBACKTYPE;
 

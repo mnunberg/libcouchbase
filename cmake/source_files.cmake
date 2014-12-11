@@ -63,6 +63,8 @@ SET(LCB_CORE_SRC
     src/newconfig.c
     src/nodeinfo.c
     src/iofactory.c
+    src/q2i/q2i.c
+    src/q2i/query.pb-c.c
     src/retryq.c
     src/retrychk.c
     src/settings.c

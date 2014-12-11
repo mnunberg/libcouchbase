@@ -290,7 +290,10 @@ dupstr_or_null(const char *s) {
 static void
 server_clear(mc_SERVER *server)
 {
-    (void)server;
+    if (server->ixserver) {
+        mcserver_close(server->ixserver);
+        server->ixserver = NULL;
+    }
 }
 
 static struct mc_SERVER_PROTOFUNCS_st McProcs = {
@@ -305,6 +308,8 @@ mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix)
 {
     mc_SERVER *ret;
     lcbvb_SVCMODE mode;
+    const char *qhost;
+
     ret = calloc(1, sizeof(*ret));
     if (!ret) {
         return ret;
@@ -316,11 +321,12 @@ mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix)
     ret->datahost = dupstr_or_null(VB_MEMDSTR(vbc, ix, mode));
     mcserver_base_init(ret, instance, ret->datahost);
     ret->pipeline.buf_done_callback = buf_done_cb;
+
+    qhost = lcbvb_get_hostport(vbc, ix, LCBVB_SVCTYPE_IXQUERY, mode);
+    if (qhost != NULL) {
+        ret->ixserver = mcserver_q2i_alloc(instance, qhost);
+    }
+
     return ret;
 }
 
-mc_SERVER *
-mcserver_alloc(lcb_t instance, unsigned ix)
-{
-    return mcserver_memd_alloc(instance, LCBT_VBCONFIG(instance), ix);
-}

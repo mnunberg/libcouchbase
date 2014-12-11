@@ -304,7 +304,7 @@ void lcb_update_vbconfig(lcb_t instance, clconfig_info *config)
 
         for (ii = 0; ii < nservers; ii++) {
             mc_SERVER *srv;
-            if ((srv = mcserver_alloc(instance, ii)) == NULL) {
+            if ((srv = mcserver_memd_alloc(instance, config->vbc, ii)) == NULL) {
                 assert(srv);
                 lcb_log(LOGARGS(instance, FATAL), "Couldn't allocate memory for server instance!");
                 return;
