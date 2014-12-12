@@ -9,7 +9,7 @@
  * * @subpage lcb-init
  * * @subpage lcb-kv-api
  * * @subpage lcb-cntl-settings
- * * @subpage lcb-public-api3
+ * * @subpage lcb-kv-legacy-api
  *
  * You may read about related Couchbase software at http://docs.couchbase.com/
  *
