@@ -315,7 +315,7 @@ typedef struct mc_packet_st {
     uint8_t retries;
 
     /** flags for request. @see mcreq_flags */
-    uint16_t flags;
+    lcb_U16 flags;
 
     /** Cached opaque value */
     uint32_t opaque;
@@ -657,7 +657,8 @@ mcreq_get_bodysize(const mc_PACKET *packet);
  * @param pkt the packet
  * @return the total size
  */
-#define mcreq_get_size(pkt) (mcreq_get_bodysize(pkt) + MCREQ_PKT_BASESIZE)
+uint32_t
+mcreq_get_size(const mc_PACKET *packet);
 
 /** Initializes a single pipeline object */
 int
