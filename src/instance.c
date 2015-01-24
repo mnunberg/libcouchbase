@@ -538,7 +538,7 @@ void lcb_destroy(lcb_t instance)
         dset_list = (struct lcb_DURSET_st **)hashset_get_items(hs, NULL);
         if (dset_list) {
             for (ii = 0; ii < nitems; ii++) {
-                lcb_durability_dset_destroy(dset_list[ii]);
+                lcbdur_destroy(dset_list[ii]);
             }
             free(dset_list);
         }
@@ -706,7 +706,20 @@ LIBCOUCHBASE_API
 void
 lcb_sched_fail(lcb_t instance)
 {
+    size_t ndur = 0;
+    hashset_t hs = NULL;
+
     mcreq_sched_fail(&instance->cmdq);
+    /* Check for any non-submitted durability ops (still in OSBINIT) */
+    hs = lcb_aspend_get(&instance->pendops, LCB_PENDTYPE_DURABILITY);
+    if ((ndur = hashset_num_items(hs))) {
+        size_t ii;
+        void **itmlist = hashset_get_items(hs, NULL);
+        for (ii = 0; ii < ndur; ii++) {
+            lcbdur_maybe_schedfail((struct lcb_DURSET_st*)itmlist[ii]);
+        }
+        free(itmlist);
+    }
 }
 
 LIBCOUCHBASE_API
