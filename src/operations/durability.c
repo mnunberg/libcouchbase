@@ -377,6 +377,30 @@ dset_ctx_fail(lcb_MULTICMD_CTX *mctx)
     lcb_durability_dset_destroy(dset);
 }
 
+static lcb_U8
+get_poll_meth(lcb_t instance, const lcb_DURABILITYOPTSv0 *options)
+{
+    /* Need to call this first, so we can actually allocate the appropriate
+     * data for this.. */
+    lcb_U8 meth = options->pollopts;
+    if (meth == LCB_DURABILITY_METH_DEFAULT) {
+        meth = LCB_DURABILITY_METH_CAS;
+
+        if (LCBT_SETTING(instance, fetch_synctokens) &&
+                LCBT_SETTING(instance, dur_synctokens)) {
+            size_t ii;
+            for (ii = 0; ii < LCBT_NSERVERS(instance); ii++) {
+                mc_SERVER *s = LCBT_GET_SERVER(instance, ii);
+                if (s->synctokens) {
+                    meth = LCB_DURABILITY_METH_SEQNO;
+                    break;
+                }
+            }
+        }
+    }
+    return meth;
+}
+
 LIBCOUCHBASE_API
 lcb_MULTICMD_CTX *
 lcb_endure3_ctxnew(lcb_t instance, const lcb_durability_opts_t *options,
@@ -385,6 +409,7 @@ lcb_endure3_ctxnew(lcb_t instance, const lcb_durability_opts_t *options,
     lcb_DURSET *dset;
     lcb_error_t err_s;
     lcbio_pTABLE io = instance->iotable;
+    lcb_U8 meth;
 
     if (!errp) {
         errp = &err_s;
@@ -395,12 +420,15 @@ lcb_endure3_ctxnew(lcb_t instance, const lcb_durability_opts_t *options,
         return NULL;
     }
 
+    meth = get_poll_meth(instance, &options->v.v0);
+
     dset = calloc(1, sizeof(*dset));
     if (!dset) {
         *errp = LCB_CLIENT_ENOMEM;
         return NULL;
     }
     dset->opts = options->v.v0;
+    dset->opts.pollopts = meth;
     dset->instance = instance;
     dset->mctx.addcmd = dset_ctx_add;
     dset->mctx.done = dset_ctx_schedule;

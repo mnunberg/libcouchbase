@@ -746,6 +746,20 @@ lcb_error_t lcb_destroy_io_ops(lcb_io_opt_t op);
  * @endcode
  */
 
+/**
+ * Structure representing a synchronization token. This token may be used
+ * for durability operations.
+ *
+ * This structure is considered opaque and thus has no alignment requirements.
+ * Its size is fixed at 16 bytes; though.
+ */
+typedef union {
+    char bytes[16];
+    struct { lcb_U64 uuid; lcb_U64 seqno; } s_;
+} lcb_SYNCTOKEN;
+#define LCB_SYNCTOKEN_ID(p) (p)->s_.uuid
+#define LCB_SYNCTOKEN_SEQ(p) (p)->s_.seqno
+
 /******************************************************************************
  ******************************************************************************
  ******************************************************************************
@@ -1260,6 +1274,7 @@ typedef struct {
     const void *key; /**< Key that was stored */
     lcb_SIZE nkey; /**< Size of key that was stored */
     lcb_cas_t cas; /**< Cas representing current mutation */
+    lcb_SYNCTOKEN synctoken;
 } lcb_STORERESPv0;
 
 /** @brief Wrapper structure for lcb_STORERESPv0 */
@@ -1890,6 +1905,7 @@ typedef struct {
      * LCB_KEY_EEXISTS
      */
     lcb_cas_t cas;
+    const lcb_SYNCTOKEN *synctok;
 } lcb_DURABILITYCMDv0;
 
 /**
@@ -1902,6 +1918,26 @@ typedef struct lcb_durability_cmd_st {
         lcb_DURABILITYCMDv0 v0;
     } v;
 } lcb_durability_cmd_t;
+
+
+/**
+ * Use the default durability method. This will use METH_OBSSEQNO if both
+ * @ref LCB_CNTL_FETCH_SYNCTOKENS and @ref LCB_CNTL_DURABILITY_SYNCTOKENS
+ * are enabled, and will revert to METH_OBSCOMPAT otherwise.
+ */
+#define LCB_DURABILITY_METH_DEFAULT 0
+
+/**
+ * Always use the old-style CAS-based observe. This is discouraged as it is
+ * less reliable, but may be reverted to if the old mode gives problems.
+ */
+#define LCB_DURABILITY_METH_CAS 1
+
+/**
+ * Always use implicit sync tokens, or the ones passed in from the commands,
+ * if they exist.
+ */
+#define LCB_DURABILITY_METH_SEQNO 2
 
 /** @brief Options for lcb_durability_poll() */
 typedef struct {
@@ -1939,6 +1975,8 @@ typedef struct {
      * the maximum available
      */
     lcb_U8 cap_max;
+
+    lcb_U8 pollopts;
 } lcb_DURABILITYOPTSv0;
 
 /**@brief Options for lcb_durability_poll() (wrapper)

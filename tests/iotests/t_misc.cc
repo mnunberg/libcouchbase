@@ -225,7 +225,7 @@ TEST_F(MockUnitTest, testEmptyKeys)
 
     ctx = lcb_endure3_ctxnew(instance, &dopts, NULL);
     ASSERT_TRUE(ctx != NULL);
-    ASSERT_EQ(LCB_EMPTY_KEY, ctx->addcmd(ctx, &u.endure));
+    ASSERT_EQ(LCB_EMPTY_KEY, ctx->addcmd(ctx, (lcb_CMDBASE*)&u.endure));
     ctx->fail(ctx);
 
     ASSERT_EQ(LCB_SUCCESS, lcb_stats3(instance, NULL, &u.stats));

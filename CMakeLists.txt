@@ -306,6 +306,9 @@ ENDIF()
 TARGET_LINK_LIBRARIES(couchbase ${LCB_LINK_DEPS})
 TARGET_LINK_LIBRARIES(couchbaseS ${LCB_LINK_DEPS})
 
+ADD_EXECUTABLE(stok_test tests/synctoks.cc)
+TARGET_LINK_LIBRARIES(stok_test couchbase)
+
 ENABLE_TESTING()
 IF(NOT LCB_NO_TESTS)
     ADD_SUBDIRECTORY(tests tests)
