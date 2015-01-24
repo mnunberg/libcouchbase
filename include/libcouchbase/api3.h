@@ -235,6 +235,7 @@ typedef enum {
     LCB_CALLBACK_GETREPLICA, /**< lcb_rget3() */
     LCB_CALLBACK_ENDURE, /**< lcb_endure3_ctxnew() */
     LCB_CALLBACK_HTTP, /**< lcb_http3() */
+    LCB_CALLBACK_OBSEQNO, /**< For lcb_observe_synctoken3() */
     LCB_CALLBACK__MAX /* Number of callbacks */
 } lcb_CALLBACKTYPE;
 
@@ -605,6 +606,7 @@ typedef struct {
 typedef struct {
     LCB_RESP_BASE
     lcb_storage_t op;
+    lcb_SYNCTOKEN synctoken;
 } lcb_RESPSTORE;
 
 /**
@@ -936,6 +938,52 @@ typedef struct {
 LIBCOUCHBASE_API
 lcb_MULTICMD_CTX *
 lcb_observe3_ctxnew(lcb_t instance);
+
+typedef struct {
+    LCB_CMD_BASE;
+    lcb_U16 server_index;
+    lcb_U16 vbid; /**< vBucket ID to query */
+    lcb_U64 uuid; /**< UUID known to client which should be queried */
+} lcb_CMDOBSEQNO;
+
+typedef struct {
+    LCB_RESP_BASE
+    lcb_U16 vbid; /**< vBucket ID (for potential mapping) */
+    lcb_U16 server_index; /**< Input server index */
+    lcb_U64 cur_uuid; /**< UUID for this vBucket as known to the server */
+    lcb_U64 persisted_seqno; /**< Highest persisted sequence */
+    lcb_U64 mem_seqno; /**< Highest known sequence */
+
+    /**In the case where the command's uuid is not the most current, this
+     * contains the last known UUID */
+    lcb_U64 old_uuid;
+    lcb_U64 old_seqno;
+} lcb_RESPOBSEQNO;
+
+LIBCOUCHBASE_API
+lcb_error_t
+lcb_observe_seqno3(lcb_t instance, const void *cookie, const lcb_CMDOBSEQNO *cmd);
+
+/**
+ * @volatile
+ *
+ * Retrieve the synctoken for a given key. The key must have been previously
+ * mutated by this client instance, _and_ both ::LCB_CNTL_DURABILITY_SYNCTOKENS
+ * and ::LCB_CNTL_FETCH_SYNCTOKENS should be enabled
+ * @param instance the instance
+ * @param key the key for which the synctoken should be retrieved
+ * @param nkey the length of the key
+ * @param[out] vbid the vBucket ID for the key
+ * @param[out] stok the synctoken
+ *
+ * @return A status code. If the status code is ::LCB_SUCCESS then the key's
+ * vBucket ID will be placed into `vbid` and the pointer for the synctoken will
+ * be stored in `stok`.
+ */
+LIBCOUCHBASE_API
+lcb_error_t
+lcb_get_synctoken(lcb_t instance, const void *key, size_t nkey,
+    lcb_U16 *vbid, const lcb_SYNCTOKEN **stok);
 /**@}*/
 
 /**@name Wait for items to be persisted or replicated to nodes
@@ -949,7 +997,10 @@ lcb_observe3_ctxnew(lcb_t instance);
  * nodes. If the item exists on the master's cache with a different CAS then
  * the operation will fail
  */
-typedef lcb_CMDBASE lcb_CMDENDURE;
+typedef struct {
+    LCB_CMD_BASE;
+    const lcb_SYNCTOKEN *synctoken;
+} lcb_CMDENDURE;
 
 /**@brief Response structure for endure */
 typedef struct {
