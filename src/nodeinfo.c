@@ -70,6 +70,15 @@ LIBCOUCHBASE_API
 const char *
 lcb_get_node(lcb_t instance, lcb_GETNODETYPE type, unsigned index)
 {
+    lcbvb_SVCMODE mode;
+    lcbvb_CONFIG *vbc = LCBT_VBCONFIG(instance);
+
+    if (LCBT_SETTING(instance, sslopts) & LCB_SSL_ENABLED) {
+        mode = LCBVB_SVCMODE_SSL;
+    } else {
+        mode = LCBVB_SVCMODE_PLAIN;
+    }
+
     if (type & LCB_NODE_HTCONFIG) {
         if (type & LCB_NODE_CONNECTED) {
             const lcb_host_t *host = lcb_confmon_get_rest_host(instance->confmon);
@@ -78,17 +87,9 @@ lcb_get_node(lcb_t instance, lcb_GETNODETYPE type, unsigned index)
             } else {
                 return return_badhost(type);
             }
-
         } else {
             /* Retrieve one from the vbucket configuration */
-            lcbvb_CONFIG *vbc = LCBT_VBCONFIG(instance);
-            lcbvb_SVCMODE mode;
             const char *hp = NULL;
-            if (LCBT_SETTING(instance, sslopts) & LCB_SSL_ENABLED) {
-                mode = LCBVB_SVCMODE_SSL;
-            } else {
-                mode = LCBVB_SVCMODE_PLAIN;
-            }
 
             if (instance->type == LCB_TYPE_BUCKET) {
                 if (vbc) {
@@ -131,7 +132,7 @@ lcb_get_node(lcb_t instance, lcb_GETNODETYPE type, unsigned index)
         if (type & LCB_NODE_DATA) {
             return mk_scratch_host(instance, server->curhost);
         } else {
-            return server->viewshost;
+            return lcbvb_get_hostport(vbc, index, LCBVB_SVCTYPE_VIEWS, mode);
         }
     } else {
         return NULL; /* don't know the type */

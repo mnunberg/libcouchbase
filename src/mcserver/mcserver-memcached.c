@@ -314,8 +314,6 @@ mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix)
             ? LCBVB_SVCMODE_SSL : LCBVB_SVCMODE_PLAIN;
     ret->procs = &McProcs;
     ret->datahost = dupstr_or_null(VB_MEMDSTR(vbc, ix, mode));
-    ret->resthost = dupstr_or_null(VB_MGMTSTR(vbc, ix, mode));
-    ret->viewshost = dupstr_or_null(VB_CAPIURL(vbc, ix, mode));
     mcserver_base_init(ret, instance, ret->datahost);
     ret->pipeline.buf_done_callback = buf_done_cb;
     return ret;

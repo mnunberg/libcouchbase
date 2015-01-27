@@ -311,8 +311,6 @@ server_free(mc_SERVER *server)
         lcbio_timer_destroy(server->io_timer);
     }
 
-    free(server->resthost);
-    free(server->viewshost);
     free(server->datahost);
     free(server->curhost);
     lcb_settings_unref(server->settings);
