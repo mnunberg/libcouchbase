@@ -215,7 +215,7 @@ replace_config(lcb_t instance, clconfig_info *next_config)
      */
     for (ii = 0; ii < nnew; ii++) {
         if (!ppnew[ii]) {
-            ppnew[ii] = (mc_PIPELINE *)mcserver_alloc2(instance, next_config->vbc, ii);
+            ppnew[ii] = (mc_PIPELINE *)mcserver_memd_alloc(instance, next_config->vbc, ii);
             ppnew[ii]->index = ii;
         }
     }

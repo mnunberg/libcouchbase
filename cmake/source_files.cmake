@@ -58,7 +58,8 @@ SET(LCB_CORE_SRC
     src/instance.c
     src/legacy.c
     src/mcserver/negotiate.c
-    src/mcserver/mcserver.c
+    src/mcserver/mcserver-core.c
+    src/mcserver/mcserver-memcached.c
     src/newconfig.c
     src/nodeinfo.c
     src/iofactory.c

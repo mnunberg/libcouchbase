@@ -29,6 +29,8 @@ extern "C" {
 
 struct lcb_settings_st;
 struct lcb_server_st;
+struct mc_SERVER_st;
+struct mc_SERVER_PROTOFUNCS_st;
 
 /**
  * The structure representing each couchbase server
@@ -36,6 +38,8 @@ struct lcb_server_st;
 typedef struct mc_SERVER_st {
     /** Pipeline object for command queues */
     mc_PIPELINE pipeline;
+
+    struct mc_SERVER_PROTOFUNCS_st *procs;
 
     /** The server endpoint as hostname:port */
     char *datahost;
@@ -70,7 +74,39 @@ typedef struct mc_SERVER_st {
     lcb_host_t *curhost;
 } mc_SERVER;
 
+typedef struct mc_SERVER_PROTOFUNCS_st {
+    /**
+     * Process a single packet
+     * @param The server object
+     * @param The I/O context
+     * @param The read buffer
+     * @return MCSERVER_PKT_READ_COMPLETE or MCSERVER_PKT_READ_PARTIAL
+     */
+    int (*process)(mc_SERVER*, lcbio_pCTX, rdb_IOROPE*);
+
+    /**
+     * Perform any initial negotiation for the given socket
+     * @param server The server which might need negotiation
+     * @param The socket
+     * @return True if negotiated, false otherwise. If false, the
+     * implementation shall begin the negotiation process and call back to
+     * mcserver_on_connected() when done.
+     */
+    int (*negotiate)(mc_SERVER *, lcbio_SOCKET *);
+
+    /**
+     * Callback to clear any structures allocated by this 'subclass'
+     * @param The server to clear
+     */
+    void (*clean)(mc_SERVER *);
+
+    /** Called when a single packet has failed */
+    mcreq_pktfail_fn fail_packet;
+} mc_SERVER_PROTOFUNCS;
+
 #define MCSERVER_TIMEOUT(c) (c)->settings->operation_timeout
+#define MCSERVER_PKT_READ_COMPLETE 1
+#define MCSERVER_PKT_READ_PARTIAL 0
 
 /**
  * Allocate and initialize a new server object. The object will not be
@@ -80,10 +116,18 @@ typedef struct mc_SERVER_st {
  * @return the new object or NULL on allocation failure.
  */
 mc_SERVER *
-mcserver_alloc(lcb_t instance, int ix);
+mcserver_alloc(lcb_t instance, unsigned ix);
 
 mc_SERVER *
-mcserver_alloc2(lcb_t instance, lcbvb_CONFIG* vbc, int ix);
+mcserver_memd_alloc(lcb_t instance, lcbvb_CONFIG* vbc, int ix);
+
+/* Internal callback for connection completion */
+void
+mcserver_on_connected(lcbio_SOCKET *sock,
+    void *data, lcb_error_t err, lcbio_OSERR syserr);
+
+void
+mcserver_base_init(mc_SERVER *server, lcb_t instance, const char *hostport);
 
 /**
  * Close the server. The resources of the server may still continue to persist
