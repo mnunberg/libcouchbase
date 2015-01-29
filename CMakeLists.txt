@@ -309,6 +309,9 @@ TARGET_LINK_LIBRARIES(couchbaseS ${LCB_LINK_DEPS})
 ADD_EXECUTABLE(stok_test tests/synctoks.cc)
 TARGET_LINK_LIBRARIES(stok_test couchbase)
 
+ADD_EXECUTABLE(n1qltest tests/n1qltest.cc)
+TARGET_LINK_LIBRARIES(n1qltest couchbase)
+
 ENABLE_TESTING()
 IF(NOT LCB_NO_TESTS)
     ADD_SUBDIRECTORY(tests tests)
