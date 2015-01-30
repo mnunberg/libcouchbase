@@ -3351,6 +3351,16 @@ LIBCOUCHBASE_API
 void
 lcb_dump(lcb_t instance, FILE *fp, lcb_U32 flags);
 
+struct hostlist_st;
+
+LCB_INTERNAL_API
+lcb_error_t
+lcb_dnssrv_query(const char *, struct hostlist_st*);
+
+LCB_INTERNAL_API
+struct hostlist_st*
+lcb_dnssrv_getbslist(const char *, int, lcb_error_t*);
+
 /* Post-include some other headers */
 #ifdef __cplusplus
 }

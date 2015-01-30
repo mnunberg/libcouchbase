@@ -56,7 +56,8 @@ typedef struct {
     lcb_U16 implicit_port; /**< Implicit port, based on scheme */
     int loglevel; /* cached loglevel */
     unsigned flags; /**< Internal flags */
-    lcb_config_transport_t transports[LCB_CONFIG_TRANSPORT_MAX];
+    lcb_config_transport_t transports[LCB_CONFIG_TRANSPORT_MAX+1];
+    unsigned use_dnssrv;
 } lcb_CONNSPEC;
 
 #define LCB_SPECSCHEME_RAW "couchbase+explicit://"
@@ -65,6 +66,8 @@ typedef struct {
 #define LCB_SPECSCHEME_HTTP "http://"
 #define LCB_SPECSCHEME_HTTP_SSL "https-internal://"
 #define LCB_SPECSCHEME_MCCOMPAT "memcached://"
+#define LCB_SPECSCHEME_SRV "couchbase+dnssrv://"
+#define LCB_SPECSCHEME_SRV_SSL "couchbases+dnssrv://"
 
 /**
  * Compile a spec string into a structure suitable for further processing.

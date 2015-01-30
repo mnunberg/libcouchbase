@@ -135,6 +135,14 @@ parse_hosts(PARSECTX *ctx, const char *hosts_end)
             port_s++;
         }
 
+        if (out->use_dnssrv) {
+            if (!LCB_LIST_IS_EMPTY(&out->hosts)) {
+                SET_ERROR("Only a single host allowed using dnssrv");
+            } else if (port_s != NULL) {
+                SET_ERROR("Port not allowed with dnssrv");
+            }
+        }
+
         dh = malloc(sizeof(*dh) + hostlen);
         dh->type = 0;
         dh->port = 0;
@@ -361,6 +369,16 @@ lcb_connspec_parse(const char *connstr, lcb_CONNSPEC *out, const char **errmsg)
         out->implicit_port = 0;
     } else if (SCHEME_MATCHES(LCB_SPECSCHEME_MCCOMPAT)) {
         out->implicit_port = LCB_CONFIG_MCCOMPAT_PORT;
+
+    } else if (SCHEME_MATCHES(LCB_SPECSCHEME_SRV)) {
+        out->use_dnssrv = 1;
+        out->implicit_port = LCB_CONFIG_MCD_PORT;
+    } else if (SCHEME_MATCHES(LCB_SPECSCHEME_SRV_SSL)) {
+        out->sslopts |= LCB_SSL_ENABLED;
+        out->flags |= F_SSLSCHEME;
+        out->use_dnssrv = 1;
+        out->implicit_port = LCB_CONFIG_MCD_SSL_PORT;
+
     } else {
         /* If we don't have a scheme at all: */
         if (strstr(ctx.connstr, "://")) {

@@ -8,6 +8,7 @@ SET(LCB_UTILS_SRC
     src/strcodecs/base64.c
     src/strcodecs/url_encoding.c
     src/gethrtime.c
+    src/dns-srv.c
     src/hashtable.c
     src/hashset.c
     src/hostlist.c

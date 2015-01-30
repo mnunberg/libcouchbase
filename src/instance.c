@@ -64,6 +64,60 @@ add_and_log_host(lcb_t obj, const lcb_host_t *host, lcb_config_transport_t type)
     hostlist_add_host(target, host);
 }
 
+static lcb_error_t
+process_dns_srv(lcb_t obj, lcb_CONNSPEC *spec)
+{
+    lcb_list_t *llcur, *llnext;
+    lcb_HOSTSPEC *hostinfo;
+    lcb_error_t rc;
+    hostlist_t hl;
+    size_t ii;
+
+    if (!spec->use_dnssrv) {
+        return LCB_SUCCESS;
+    }
+
+    if (LCB_LIST_IS_EMPTY(&spec->hosts)) {
+        lcb_log(LOGARGS(obj, ERROR), "Cannot use DNS SRV without a hostname");
+        return LCB_EINVAL;
+    }
+
+    hostinfo = LCB_LIST_ITEM(LCB_LIST_HEAD(&spec->hosts), lcb_HOSTSPEC, llnode);
+    hl = lcb_dnssrv_getbslist(hostinfo->hostname, spec->sslopts, &rc);
+
+    if (hl == NULL) {
+        lcb_log(LOGARGS(obj, WARN), "DNS SRV lookup failed: 0x%x", rc);
+        return rc;
+    }
+
+    LCB_LIST_SAFE_FOR(llcur, llnext, &spec->hosts) {
+        lcb_list_delete(llcur);
+        free(LCB_LIST_ITEM(llcur, lcb_HOSTSPEC, llnode));
+    }
+
+    /* Now, go over each host in the list and re-add them */
+    for (ii = 0; ii < hl->nentries; ii++) {
+        const lcb_host_t *src = &hl->entries[ii];
+        size_t nstr;
+        lcb_HOSTSPEC *info;
+        int tmpport;
+
+        nstr = strlen(src->host);
+        info = calloc(1, sizeof(*info) + nstr + 1);
+        memcpy(info->hostname, src->host, nstr);
+        sscanf(src->port, "%d", &tmpport);
+        if (tmpport != spec->implicit_port) {
+            info->port = tmpport;
+            info->type = spec->sslopts ?
+                    LCB_CONFIG_MCD_SSL_PORT : LCB_CONFIG_MCD_PORT;
+        }
+        lcb_list_append(&spec->hosts, &info->llnode);
+    }
+    hostlist_destroy(hl);
+
+    return LCB_SUCCESS;
+}
+
 static void
 populate_nodes(lcb_t obj, const lcb_CONNSPEC *spec)
 {
@@ -412,6 +466,10 @@ lcb_error_t lcb_create(lcb_t *instance,
         goto GT_DONE;
     }
     if ((err = apply_env_options(obj)) != LCB_SUCCESS) {
+        goto GT_DONE;
+    }
+
+    if ((err = process_dns_srv(obj, &spec)) != LCB_SUCCESS) {
         goto GT_DONE;
     }
 
