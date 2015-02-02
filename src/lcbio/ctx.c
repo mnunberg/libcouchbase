@@ -274,6 +274,11 @@ invoke_read_cb(lcbio_CTX *ctx, unsigned nb)
     ctx->entered--;
 }
 
+/* Change this to however many bytes you want read in a single gulp.
+ * Once E_rdp_slurp reads this many bytes, it will stop consuming the input
+ * buffer and return EAGAIN. */
+#define RD_GULPSIZE 1024*1024
+
 static void
 E_handler(lcb_socket_t sock, short which, void *arg)
 {
@@ -283,7 +288,7 @@ E_handler(lcb_socket_t sock, short which, void *arg)
 
     if (which & LCB_READ_EVENT) {
         unsigned nb;
-        status = lcbio_E_rdb_slurp(ctx, &ctx->ior);
+        status = lcbio_E_rdb_slurp(ctx, &ctx->ior, RD_GULPSIZE);
         nb = rdb_get_nused(&ctx->ior);
 
         if (nb >= ctx->rdwant) {

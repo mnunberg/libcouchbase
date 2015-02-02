@@ -43,11 +43,12 @@
 #endif
 
 static INLINE lcbio_IOSTATUS
-lcbio_E_rdb_slurp(lcbio_CTX *ctx, rdb_IOROPE *ior)
+lcbio_E_rdb_slurp(lcbio_CTX *ctx, rdb_IOROPE *ior, unsigned rdmax)
 {
     lcb_ssize_t rv;
     lcb_IOV iov[RWINL_IOVSIZE];
     unsigned niov;
+    unsigned rdcur = 0;
     lcbio_TABLE *iot = ctx->io;
 
     do {
@@ -56,6 +57,11 @@ lcbio_E_rdb_slurp(lcbio_CTX *ctx, rdb_IOROPE *ior)
         rv = IOT_V0IO(iot).recvv(IOT_ARG(iot), CTX_FD(ctx), iov, niov);
         if (rv > 0) {
             rdb_rdend(ior, rv);
+
+            rdcur += rv;
+            if (rdcur > rdmax) {
+                return LCBIO_PENDING;
+            }
         } else if (rv == -1) {
             switch (IOT_ERRNO(iot)) {
             case EWOULDBLOCK:
