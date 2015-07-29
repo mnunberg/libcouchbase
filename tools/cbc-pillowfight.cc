@@ -96,6 +96,12 @@ static string genJsonDocument(int docsize)
     return writer.write(root);
 }
 
+struct TemplateField {
+    string path;
+    unsigned minval;
+    unsigned maxval;
+};
+
 class DocGenerator {
 public:
     DocGenerator() : minSize(0), maxSize(0), mode(RAW) {
@@ -150,6 +156,43 @@ public:
         doc_values.assign(userdocs.begin(), userdocs.end());
     }
 
+    void setTemplates(const vector<string>& specs) {
+        if (mode == RAW) {
+            throw string("Template mode must be used with JSON documents!");
+        }
+
+        vector<string>::const_iterator ii;
+
+        // Parse the specs first
+        for (ii = specs.begin(); ii != specs.end(); ++ii) {
+            // Just need to find the path
+            size_t endpos = ii->find(',');
+            if (endpos == string::npos) {
+                throw string("invalid template spec: need field,min,max");
+            }
+            TemplateField field;
+            field.path = ii->substr(0, endpos);
+            int rv = sscanf(ii->c_str() + endpos + 1, "%u,%u",
+                &field.minval, &field.maxval);
+            if (rv != 2) {
+                throw string("invalid template spec: need field,min,max");
+            }
+            if (field.minval > field.maxval) {
+                throw string("min cannot be higher than max");
+            }
+            template_fields.push_back(field);
+        }
+
+        Json::Reader parser;
+        for (ii = doc_values.begin(); ii != doc_values.end(); ++ii) {
+            Json::Value root;
+            if (!parser.parse(*ii, root)) {
+                throw string("Couldn't parse document as JSON");
+            }
+            template_roots.push_back(root);
+        }
+    }
+
     /**
      * Get a document buffer and size for a given iteration sequence
      * @param seq The sequence number
@@ -167,12 +210,37 @@ public:
         }
     }
 
+    vector<Json::Value> copyTemplates() {
+        return template_roots;
+    }
+
+    /**
+     * Get a populated document template
+     * @param templates local (modifiable) templates
+     * @param seq the sequence number
+     * @param out string buffer for the result
+     */
+    void getPopulatedTemplate(vector<Json::Value>& templates,
+        size_t seq, string& out)
+    {
+        const TemplateField& field = template_fields[seq % template_fields.size()];
+        Json::Value& templ = templates[seq % templates.size()];
+        unsigned num = drand48() * (field.maxval - field.minval);
+        num += field.minval;
+
+        templ[field.path] = num;
+        out = Json::FastWriter().write(templ);
+        templ.removeMember(field.path);
+    }
+
 private:
     uint32_t minSize;
     uint32_t maxSize;
     Mode mode;
     vector<string> doc_values;
+    vector<Json::Value> template_roots;
     vector<size_t> raw_sizes;
+    vector<TemplateField> template_fields;
     string rawbuf;
 };
 
@@ -195,7 +263,8 @@ public:
         o_startAt("start-at"),
         o_rateLimit("rate-limit"),
         o_userdocs("docs"),
-        o_writeJson("json")
+        o_writeJson("json"),
+        o_templatePairs("template")
     {
         o_multiSize.setDefault(100).abbrev('B').description("Number of operations to batch");
         o_numItems.setDefault(1000).abbrev('I').description("Number of items to operate on");
@@ -213,6 +282,8 @@ public:
         o_rateLimit.setDefault(0).description("Set operations per second limit (per thread)");
         o_userdocs.description("User documents to load (overrides --min-size and --max-size");
         o_writeJson.description("Enable writing JSON values (rather than bytes)");
+        o_templatePairs.description("Values for templates to be inserted into user documents");
+        o_templatePairs.argdesc("FIELD,MIN,MAX");
     }
 
     void processOptions() {
@@ -258,6 +329,14 @@ public:
             }
             docgen.init(o_minSize.result(), o_maxSize.result(), genmode);
         }
+
+        if (o_templatePairs.passed()) {
+            vector<string> specs = o_templatePairs.result();
+            docgen.setTemplates(specs);
+            hasTemplates = true;
+        } else {
+            hasTemplates = false;
+        }
     }
 
     void addOptions(Parser& parser) {
@@ -277,6 +356,7 @@ public:
         parser.addOption(o_rateLimit);
         parser.addOption(o_userdocs);
         parser.addOption(o_writeJson);
+        parser.addOption(o_templatePairs);
         params.addToParser(parser);
         depr.addOptions(parser);
     }
@@ -321,6 +401,7 @@ public:
     bool dgm;
     bool shouldPopulate;
     uint32_t waitTime;
+    bool hasTemplates;
     ConnParams params;
     DocGenerator docgen;
 
@@ -346,6 +427,9 @@ private:
 
     // Whether generated values should be JSON
     BoolOption o_writeJson;
+
+    // List of template ranges for value generation
+    ListOption o_templatePairs;
 
     DeprecatedOptions depr;
 } config;
@@ -417,8 +501,12 @@ struct NextOp {
     // The mode here is for future use with subdoc
     enum Mode { STORE, GET };
     Mode mode;
+    string bkdata;
 };
 
+/**
+ * Stateful, per-thread generator
+ */
 class KeyGenerator {
 public:
     KeyGenerator(int ix) :
@@ -443,6 +531,7 @@ public:
         id = ix;
         modeGet = NextOp::GET;
         modeStore = NextOp::STORE;
+        local_templates = config.docgen.copyTemplates();
     }
 
     void setNextOp(NextOp& op) {
@@ -487,7 +576,13 @@ public:
     }
 
     void setOpDocValue(NextOp& op) {
-        op.data = config.docgen.getDocValue(op.seqno, &op.valsize);
+        if (config.hasTemplates) {
+            config.docgen.getPopulatedTemplate(local_templates, op.seqno, op.bkdata);
+            op.data = op.bkdata.c_str();
+            op.valsize = op.bkdata.size();
+        } else {
+            op.data = config.docgen.getDocValue(op.seqno, &op.valsize);
+        }
     }
 
     bool shouldStore(uint32_t seqno) {
@@ -530,6 +625,7 @@ private:
     bool isPopulate;
     NextOp::Mode modeGet;
     NextOp::Mode modeStore;
+    vector<Json::Value> local_templates;
 };
 
 class ThreadContext
@@ -748,8 +844,13 @@ int main(int argc, char **argv)
 
     Parser parser("cbc-pillowfight");
     config.addOptions(parser);
-    parser.parse(argc, argv, false);
-    config.processOptions();
+    try {
+        parser.parse(argc, argv, false);
+        config.processOptions();
+    } catch (std::string& e) {
+        std::cerr << e << std::endl;
+        exit(EXIT_FAILURE);
+    }
     size_t nthreads = config.getNumThreads();
     log("Running. Press Ctrl-C to terminate...");
 
