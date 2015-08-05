@@ -223,14 +223,22 @@ public:
     void getPopulatedTemplate(vector<Json::Value>& templates,
         size_t seq, string& out)
     {
-        const TemplateField& field = template_fields[seq % template_fields.size()];
-        Json::Value& templ = templates[seq % templates.size()];
-        unsigned num = drand48() * (field.maxval - field.minval);
-        num += field.minval;
+        vector<TemplateField>::const_iterator ii;
+        Json::Value &templ = templates[seq % templates.size()];
 
-        templ[field.path] = num;
+        for (ii = template_fields.begin(); ii != template_fields.end(); ++ii) {
+            unsigned num = drand48() * (ii->maxval - ii->minval);
+            num += ii->minval;
+            templ[ii->path] = num;
+
+        }
+
+        // Write the value..
         out = Json::FastWriter().write(templ);
-        templ.removeMember(field.path);
+
+        for (ii = template_fields.begin(); ii != template_fields.end(); ++ii) {
+            templ.removeMember(ii->path);
+        }
     }
 
 private:
