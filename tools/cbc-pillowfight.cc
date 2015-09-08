@@ -65,6 +65,39 @@ struct DeprecatedOptions {
     }
 };
 
+/**
+ * Stateful sequence generator, divides sequences based on number of threads
+ */
+class SeqGenerator {
+public:
+    SeqGenerator() : rnum(0), offset(0), total_self(0) {
+    }
+
+    /**
+     * @param range_start lower bound for range
+     * @param range_end upper bound for range
+     * @param num_workers total number of generators
+     * @param cur_ix index of current generator
+     */
+    void init(uint32_t range_start, uint32_t range_end, int num_workers, int cur_ix) {
+        offset = range_start;
+        uint32_t total = range_end - range_start;
+        total_self = total / num_workers;
+        offset += total_self * cur_ix;
+    }
+
+    uint32_t next() {
+        rnum++;
+        rnum %= total_self;
+        rnum += offset;
+        return rnum;
+    }
+private:
+    uint32_t rnum; // internal iterator
+    uint32_t offset; // beginning numerical offset
+    uint32_t total_self; // maximum value of iterator
+};
+
 #define JSON_VALUE_SIZE 16
 
 static void decrSize(int *orig, size_t toDecr)
@@ -100,6 +133,12 @@ struct TemplateField {
     string path;
     unsigned minval;
     unsigned maxval;
+    bool sequential;
+};
+
+struct LocalTemplate {
+    vector<Json::Value> roots;
+    vector<SeqGenerator> ff_gens;
 };
 
 class DocGenerator {
@@ -172,15 +211,19 @@ public:
             }
             TemplateField field;
             field.path = ii->substr(0, endpos);
-            int rv = sscanf(ii->c_str() + endpos + 1, "%u,%u",
-                &field.minval, &field.maxval);
-            if (rv != 2) {
+            int is_sequential = 0;
+            int rv = sscanf(ii->c_str() + endpos + 1, "%u,%u,%u",
+                &field.minval, &field.maxval, &is_sequential);
+            if (rv < 2) {
                 throw string("invalid template spec: need field,min,max");
+            }
+            if (is_sequential) {
+                field.sequential = true;
             }
             if (field.minval > field.maxval) {
                 throw string("min cannot be higher than max");
             }
-            template_fields.push_back(field);
+            fields.push_back(field);
         }
 
         Json::Reader parser;
@@ -189,7 +232,7 @@ public:
             if (!parser.parse(*ii, root)) {
                 throw string("Couldn't parse document as JSON");
             }
-            template_roots.push_back(root);
+            roots.push_back(root);
         }
     }
 
@@ -210,8 +253,19 @@ public:
         }
     }
 
-    vector<Json::Value> copyTemplates() {
-        return template_roots;
+    LocalTemplate copyTemplates(int num_workers, int ix) {
+        LocalTemplate ret;
+        ret.roots = roots;
+
+        for (size_t ii = 0; ii < fields.size(); ++ii) {
+            const TemplateField& field = fields[ii];
+            ret.ff_gens.push_back(SeqGenerator());
+            if (field.sequential) {
+                SeqGenerator& gen = ret.ff_gens.back();
+                gen.init(field.minval, field.maxval, num_workers, ix);
+            }
+        }
+        return ret;
     }
 
     /**
@@ -220,24 +274,29 @@ public:
      * @param seq the sequence number
      * @param out string buffer for the result
      */
-    void getPopulatedTemplate(vector<Json::Value>& templates,
-        size_t seq, string& out)
+    void getPopulatedTemplate(LocalTemplate& templates, size_t seq, string& out)
     {
-        vector<TemplateField>::const_iterator ii;
-        Json::Value &templ = templates[seq % templates.size()];
+        Json::Value &templ = templates.roots[seq % templates.roots.size()];
 
-        for (ii = template_fields.begin(); ii != template_fields.end(); ++ii) {
-            unsigned num = drand48() * (ii->maxval - ii->minval);
-            num += ii->minval;
-            templ[ii->path] = num;
+        for (size_t ii = 0; ii < fields.size(); ++ii) {
+            const TemplateField& field = fields[ii];
+            unsigned num;
+            if (field.sequential) {
+                num = templates.ff_gens[ii].next();
+            } else {
+                num = drand48() * (field.maxval - field.minval);
+                num += field.minval;
+            }
+            templ[field.path] = num;
 
         }
 
         // Write the value..
         out = Json::FastWriter().write(templ);
 
-        for (ii = template_fields.begin(); ii != template_fields.end(); ++ii) {
-            templ.removeMember(ii->path);
+        vector<TemplateField>::const_iterator jj;
+        for (jj = fields.begin(); jj != fields.end(); ++jj) {
+            templ.removeMember(jj->path);
         }
     }
 
@@ -246,9 +305,9 @@ private:
     uint32_t maxSize;
     Mode mode;
     vector<string> doc_values;
-    vector<Json::Value> template_roots;
+    vector<Json::Value> roots;
     vector<size_t> raw_sizes;
-    vector<TemplateField> template_fields;
+    vector<TemplateField> fields;
     string rawbuf;
 };
 
@@ -291,7 +350,7 @@ public:
         o_userdocs.description("User documents to load (overrides --min-size and --max-size");
         o_writeJson.description("Enable writing JSON values (rather than bytes)");
         o_templatePairs.description("Values for templates to be inserted into user documents");
-        o_templatePairs.argdesc("FIELD,MIN,MAX");
+        o_templatePairs.argdesc("FIELD,MIN,MAX[,SEQUENTIAL]");
     }
 
     void processOptions() {
@@ -539,7 +598,7 @@ public:
         id = ix;
         modeGet = NextOp::GET;
         modeStore = NextOp::STORE;
-        local_templates = config.docgen.copyTemplates();
+        local_templates = config.docgen.copyTemplates(config.getNumThreads(), ix);
     }
 
     void setNextOp(NextOp& op) {
@@ -633,7 +692,7 @@ private:
     bool isPopulate;
     NextOp::Mode modeGet;
     NextOp::Mode modeStore;
-    vector<Json::Value> local_templates;
+    LocalTemplate local_templates;
 };
 
 class ThreadContext
