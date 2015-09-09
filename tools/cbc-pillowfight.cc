@@ -134,6 +134,7 @@ struct TemplateField {
     unsigned minval;
     unsigned maxval;
     bool sequential;
+    TemplateField() : minval(0), maxval(0), sequential(false) {}
 };
 
 struct LocalTemplate {
