@@ -323,6 +323,10 @@ add_op(lcb_RETRYQ *rq, mc_EXPACKET *pkt, lcb_error_t err, int options)
 
     lcb_log(LOGARGS(rq, DEBUG), "Adding PKT=%p to retry queue. Try count=%u", (void*)pkt, pkt->base.retries);
     do_schedule(rq, 0);
+
+    if (rq->settings->metrics) {
+        rq->settings->metrics->packets_retried++;
+    }
 }
 
 void

@@ -144,6 +144,8 @@ handle_nmv(mc_SERVER *oldsrv, packet_info *resinfo, mc_PACKET *oldpkt)
     clconfig_provider *cccp = lcb_confmon_get_provider(instance->confmon,
         LCB_CLCONFIG_CCCP);
 
+    MC_INCR_METRIC(&oldsrv->pipeline, packets_nmv, 1);
+
     mcreq_read_hdr(oldpkt, &hdr);
     vbid = ntohs(hdr.request.vbucket);
     lcb_log(LOGARGS(oldsrv, WARN), LOGFMT "NOT_MY_VBUCKET. Packet=%p (S=%u). VBID=%u", LOGID(oldsrv), (void*)oldpkt, oldpkt->opaque, vbid);
@@ -227,6 +229,8 @@ try_read(lcbio_CTX *ctx, mc_SERVER *server, rdb_IOROPE *ior)
         RETURN_NEED_MORE(pktsize);
     }
 
+    MC_INCR_METRIC(pl, packets_read, 1);
+
     /* Find the packet */
     if (PACKET_OPCODE(info) == PROTOCOL_BINARY_CMD_STAT && PACKET_NKEY(info) != 0) {
         is_last = 0;
@@ -237,6 +241,7 @@ try_read(lcbio_CTX *ctx, mc_SERVER *server, rdb_IOROPE *ior)
     }
 
     if (!request) {
+        MC_INCR_METRIC(pl, packets_ownerless, 1);
         lcb_log(LOGARGS(server, WARN), LOGFMT "Found stale packet (OP=0x%x, RC=0x%x, SEQ=%u)", LOGID(server), PACKET_OPCODE(info), PACKET_STATUS(info), PACKET_OPAQUE(info));
         rdb_consumed(ior, pktsize);
         return PKT_READ_COMPLETE;
@@ -407,6 +412,7 @@ purge_single_server(mc_SERVER *server, lcb_error_t error,
         lcb_bootstrap_common(server->instance,
             LCB_BS_REFRESH_THROTTLE|LCB_BS_REFRESH_INCRERR);
     }
+    MC_INCR_METRIC(pl, packets_errored, affected);
     return affected;
 }
 
@@ -460,6 +466,7 @@ timeout_server(void *arg)
     npurged = purge_single_server(server,
         LCB_ETIMEDOUT, min_valid, &next_ns, REFRESH_ONFAILED);
     if (npurged) {
+        MC_INCR_METRIC(&server->pipeline, packets_timeout, npurged);
         lcb_log(LOGARGS(server, ERROR), LOGFMT "Server timed out. Some commands have failed", LOGID(server));
     }
 
@@ -506,6 +513,7 @@ on_connected(lcbio_SOCKET *sock, void *data, lcb_error_t err, lcbio_OSERR syserr
 
     if (err != LCB_SUCCESS) {
         lcb_log(LOGARGS(server, ERR), LOGFMT "Got error for connection! (OS=%d)", LOGID(server), syserr);
+        MC_INCR_METRIC(&server->pipeline, iometrics.io_error, 1);
         if (maybe_retry_timeout_connection(server, err)) {
             return;
         }
@@ -514,6 +522,9 @@ on_connected(lcbio_SOCKET *sock, void *data, lcb_error_t err, lcbio_OSERR syserr
     }
 
     lcb_assert(sock);
+    if (server->pipeline.metrics) {
+        lcbio_set_metrics(sock, &server->pipeline.metrics->iometrics);
+    }
 
     /** Do we need sasl? */
     sessinfo = mc_sess_get(sock);
@@ -593,6 +604,13 @@ mcserver_alloc(lcb_t instance, int ix)
         lcb_host_parsez(ret->curhost, datahost, LCB_CONFIG_MCD_PORT);
     }
     ret->io_timer = lcbio_timer_new(instance->iotable, ret, timeout_server);
+
+    if (ret->settings->metrics) {
+        /** Allocate the metrics here */
+        ret->pipeline.metrics = lcb_metrics_getserver(
+            ret->settings->metrics, ret->curhost->host, ret->curhost->port, 1);
+    }
+
     return ret;
 }
 

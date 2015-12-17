@@ -66,12 +66,14 @@ typedef struct {
     lcb_host_t ep;
 } lcbio_CONNINFO;
 
+struct lcb_IOMETRICS_st;
 
 /** @brief Core socket structure */
 typedef struct lcbio_SOCKET {
     lcbio_pTABLE io;
     lcb_settings *settings;
     void *ctx;
+    struct lcb_IOMETRICS_st *metrics;
     lcbio_CONNINFO *info;
     lcbio_OSERR last_error; /**< last OS error */
     unsigned refcount; /**< refcount on socket */
@@ -335,6 +337,13 @@ lcbio_table_unref(lcbio_pTABLE iot);
 /** Decrement the reference count on the lcbio_TABLE */
 void
 lcbio_table_ref(lcbio_pTABLE iot);
+
+/**
+ * Set the metrics object for the socket. Various operations will then log
+ * the number of bytes written/received on the socket.
+ */
+#define \
+    lcbio_set_metrics(sock, m) (sock)->metrics = m
 
 /** @}*/
 

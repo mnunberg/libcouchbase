@@ -888,7 +888,7 @@ typedef enum {
 #define LCB_CNTL_N1QL_CLEARACHE 0x3E
 
 /** This is not a command, but rather an indicator of the last item */
-#define LCB_CNTL__MAX                    0x40
+#define LCB_CNTL__MAX                    0x41
 /**@}*/
 
 #ifdef __cplusplus

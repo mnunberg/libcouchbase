@@ -16,6 +16,7 @@
  */
 
 #include "mcreq.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -67,6 +68,9 @@ mcreq__pktflush_callback(void *p, nb_SIZE hint, void *arg)
     if (pkt->flags & MCREQ_F_INVOKED) {
         mcreq_packet_done(info->pl, pkt);
     }
+    if (info->pl->metrics) {
+        info->pl->metrics->packets_sent++;
+    }
     return pktsize;
 }
 
@@ -89,7 +93,6 @@ mcreq_flush_done_ex(mc_PIPELINE *pl,
 {
     if (nflushed) {
         mc__FLUSHINFO info = { pl, now };
-
         netbuf_end_flush2(&pl->nbmgr, nflushed,
                           mcreq__pktflush_callback,
                           offsetof(mc_PACKET, sl_flushq), &info);

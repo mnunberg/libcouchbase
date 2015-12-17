@@ -88,6 +88,7 @@
 
 #include "config.h"
 #include <libcouchbase/couchbase.h>
+#include <libcouchbase/metrics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,6 +97,7 @@ extern "C" {
 struct lcb_logprocs_st;
 struct lcbio_SSLCTX;
 struct rdb_ALLOCATOR;
+struct lcb_METRICS_st;
 
 /**
  * Stateless setting structure.
@@ -166,6 +168,7 @@ typedef struct lcb_settings_st {
     struct lcb_logprocs_st *logger;
     void (*dtorcb)(const void *);
     void *dtorarg;
+    struct lcb_METRICS_st *metrics;
 } lcb_settings;
 
 LCB_INTERNAL_API
@@ -180,6 +183,26 @@ void
 lcb_settings_unref(lcb_settings *);
 
 #define lcb_settings_ref(settings) (settings)->refcount++
+
+/**
+ * Metric functionality. Defined in metrics.h, but retains a global-like
+ * setting similar to lcb_settings
+ */
+lcb_METRICS *
+lcb_metrics_new(void);
+
+void
+lcb_metrics_destroy(lcb_METRICS *metrics);
+
+lcb_SERVERMETRICS *
+lcb_metrics_getserver(lcb_METRICS *metrics,
+    const char *host, const char *port, int create);
+
+void
+lcb_metrics_dumpio(const lcb_IOMETRICS *metrics, FILE *fp);
+
+void
+lcb_metrics_dumpserver(const lcb_SERVERMETRICS *metrics, FILE *fp);
 
 #ifdef __cplusplus
 }

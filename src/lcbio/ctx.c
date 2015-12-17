@@ -25,6 +25,12 @@
 #define CTX_FD(ctx) (ctx)->fd
 #define CTX_SD(ctx) (ctx)->sd
 #define CTX_IOT(ctx) (ctx)->io
+#define CTX_INCR_METRIC(ctx, metric, n) do { \
+    if (ctx->sock->metrics) { \
+        ctx->sock->metrics->metric += n; \
+    } \
+} while (0)
+
 #include "rw-inl.h"
 
 #define LOGARGS(c, lvl) (c)->sock->settings, "ioctx", LCB_LOG_##lvl, __FILE__, __LINE__
@@ -275,6 +281,17 @@ invoke_read_cb(lcbio_CTX *ctx, unsigned nb)
 }
 
 static void
+send_io_error(lcbio_CTX *ctx, lcbio_IOSTATUS status)
+{
+    lcb_error_t rc = convert_lcberr(ctx, status);
+    CTX_INCR_METRIC(ctx, io_error, 1);
+    if (status == LCBIO_SHUTDOWN) {
+        CTX_INCR_METRIC(ctx, io_close, 1);
+    }
+    lcbio_ctx_senderr(ctx, rc);
+}
+
+static void
 E_handler(lcb_socket_t sock, short which, void *arg)
 {
     lcbio_CTX *ctx = arg;
@@ -293,10 +310,10 @@ E_handler(lcb_socket_t sock, short which, void *arg)
             }
         }
         if (!LCBIO_IS_OK(status)) {
-            lcb_error_t err = convert_lcberr(ctx, status);
-            lcbio_ctx_senderr(ctx, err);
+            send_io_error(ctx, status);
             return;
         }
+        CTX_INCR_METRIC(ctx, bytes_received, nb);
     }
 
     if (which & LCB_WRITE_EVENT) {
@@ -308,10 +325,9 @@ E_handler(lcb_socket_t sock, short which, void *arg)
             }
         } else if (ctx->output) {
             status = lcbio_E_rb_write(ctx, &ctx->output->rb);
+            /** Metrics are logged by E_rb_write */
             if (!LCBIO_IS_OK(status)) {
-                deactivate_watcher(ctx);
-                ctx->err = convert_lcberr(ctx, status);
-                err_handler(ctx);
+                send_io_error(ctx, status);
                 return;
             }
         }
@@ -337,6 +353,7 @@ Cw_handler(lcb_sockdata_t *sd, int status, void *arg)
     (void)sd;
 
     ctx->npending--;
+    CTX_INCR_METRIC(ctx, bytes_sent, erb->rb.nbytes);
 
     if (!ctx->output) {
         ctx->output = erb;
@@ -373,11 +390,21 @@ Cr_handler(lcb_sockdata_t *sd, lcb_ssize_t nr, void *arg)
             if (total >= ctx->rdwant) {
                 invoke_read_cb(ctx, total);
             }
-
+            CTX_INCR_METRIC(ctx, bytes_received, total);
             lcbio_ctx_schedule(ctx);
         } else {
-            lcb_error_t err =
-                    convert_lcberr(ctx, nr ? LCBIO_SHUTDOWN : LCBIO_IOERR);
+            lcbio_IOSTATUS iostatus;
+            lcb_error_t err;
+
+            CTX_INCR_METRIC(ctx, io_error, 1);
+            if (nr) {
+                iostatus = LCBIO_IOERR;
+            } else {
+                iostatus = LCBIO_SHUTDOWN;
+                CTX_INCR_METRIC(ctx, io_close, 1);
+            }
+
+            err = convert_lcberr(ctx, iostatus);
             ctx->rdwant = 0;
             invoke_entered_errcb(ctx, err);
         }
@@ -404,7 +431,7 @@ C_schedule(lcbio_CTX *ctx)
         niov = iov[1].iov_len ? 2 : 1;
         rv = IOT_V1(io).write2(IOT_ARG(io), sd, iov, niov, ctx->output, Cw_handler);
         if (rv) {
-            lcbio_ctx_senderr(ctx, convert_lcberr(ctx, LCBIO_IOERR));
+            send_io_error(ctx, LCBIO_IOERR);
             return;
         } else {
             ctx->output = NULL;
@@ -429,8 +456,7 @@ C_schedule(lcbio_CTX *ctx)
 
         rv = IOT_V1(io).read2(IOT_ARG(io), sd, iov, niov, ctx, Cr_handler);
         if (rv) {
-            lcbio_ctx_senderr(ctx, convert_lcberr(ctx, LCBIO_IOERR));
-
+            send_io_error(ctx, LCBIO_IOERR);
         } else {
             sd->is_reading = 1;
             ctx->npending++;
@@ -486,6 +512,7 @@ E_put_ex(lcbio_CTX *ctx, lcb_IOV *iov, unsigned niov, unsigned nb)
     nw = IOT_V0IO(iot).sendv(IOT_ARG(iot), fd, iov,
         niov <= RWINL_IOVSIZE ? niov : RWINL_IOVSIZE);
     if (nw > 0) {
+        CTX_INCR_METRIC(ctx, bytes_sent, nw);
         ctx->procs.cb_flush_done(ctx, nb, nw);
         return 1;
 
@@ -504,13 +531,13 @@ E_put_ex(lcbio_CTX *ctx, lcb_IOV *iov, unsigned niov, unsigned nb)
             /* pretend all the bytes were written and deliver an error during
              * the next event loop iteration. */
             nw = nb;
-            lcbio_ctx_senderr(ctx, convert_lcberr(ctx, LCBIO_IOERR));
+            send_io_error(ctx, LCBIO_IOERR);
             goto GT_WRITE0;
         }
     } else {
         /* connection closed. pretend everything was written and send an error */
         nw = nb;
-        lcbio_ctx_senderr(ctx, convert_lcberr(ctx, LCBIO_SHUTDOWN));
+        send_io_error(ctx, LCBIO_SHUTDOWN);
         goto GT_WRITE0;
     }
 
@@ -524,13 +551,15 @@ Cw_ex_handler(lcb_sockdata_t *sd, int status, void *wdata)
 {
     lcbio_CTX *ctx = ((lcbio_SOCKET *)sd->lcbconn)->ctx;
     unsigned nflushed = (uintptr_t)wdata;
+
+    CTX_INCR_METRIC(ctx, bytes_sent, nflushed);
     ctx->procs.cb_flush_done(ctx, nflushed, nflushed);
 
     ctx->npending--;
     assert(ctx->state == ES_ACTIVE);
 
     if (status != 0) {
-        lcbio_ctx_senderr(ctx, convert_lcberr(ctx, LCBIO_IOERR));
+        send_io_error(ctx, LCBIO_IOERR);
     }
 }
 
@@ -545,6 +574,7 @@ C_put_ex(lcbio_CTX *ctx, lcb_IOV *iov, unsigned niov, unsigned nb)
         /** error! */
         lcbio_OSERR saverr = IOT_ERRNO(iot);
         ctx->procs.cb_flush_done(ctx, nb, nb);
+        /* TODO: log this */
         lcbio_ctx_senderr(ctx, lcbio_mklcberr(saverr, ctx->sock->settings));
         return 0;
     } else {
