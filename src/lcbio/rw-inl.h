@@ -105,6 +105,7 @@ lcbio_E_rb_write(lcbio_CTX *ctx, ringbuffer_t *buf)
         if (nw) {
             ringbuffer_consumed(buf, nw);
             CTX_INCR_METRIC(ctx, bytes_sent, nw);
+            CTX_INCR_METRIC(ctx, bytes_queued, -nw);
         }
     }
     return LCBIO_COMPLETED;
