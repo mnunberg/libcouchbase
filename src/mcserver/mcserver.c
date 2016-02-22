@@ -404,6 +404,7 @@ purge_single_server(mc_SERVER *server, lcb_error_t error,
         affected = -1;
     }
 
+    MC_INCR_METRIC(pl, packets_errored, affected);
     if (policy == REFRESH_NEVER) {
         return affected;
     }
@@ -412,7 +413,6 @@ purge_single_server(mc_SERVER *server, lcb_error_t error,
         lcb_bootstrap_common(server->instance,
             LCB_BS_REFRESH_THROTTLE|LCB_BS_REFRESH_INCRERR);
     }
-    MC_INCR_METRIC(pl, packets_errored, affected);
     return affected;
 }
 
