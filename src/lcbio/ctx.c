@@ -354,7 +354,6 @@ Cw_handler(lcb_sockdata_t *sd, int status, void *arg)
 
     ctx->npending--;
     CTX_INCR_METRIC(ctx, bytes_sent, erb->rb.nbytes);
-    CTX_INCR_METRIC(ctx, bytes_queued, -erb->rb.nbytes);
 
     if (!ctx->output) {
         ctx->output = erb;
@@ -514,7 +513,6 @@ E_put_ex(lcbio_CTX *ctx, lcb_IOV *iov, unsigned niov, unsigned nb)
         niov <= RWINL_IOVSIZE ? niov : RWINL_IOVSIZE);
     if (nw > 0) {
         CTX_INCR_METRIC(ctx, bytes_sent, nw);
-        CTX_INCR_METRIC(ctx, bytes_queued, -nw);
         ctx->procs.cb_flush_done(ctx, nb, nw);
         return 1;
 
@@ -555,7 +553,6 @@ Cw_ex_handler(lcb_sockdata_t *sd, int status, void *wdata)
     unsigned nflushed = (uintptr_t)wdata;
 
     CTX_INCR_METRIC(ctx, bytes_sent, nflushed);
-    CTX_INCR_METRIC(ctx, bytes_queued, -nflushed);
     ctx->procs.cb_flush_done(ctx, nflushed, nflushed);
 
     ctx->npending--;

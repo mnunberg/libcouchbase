@@ -71,6 +71,7 @@ mcreq__pktflush_callback(void *p, nb_SIZE hint, void *arg)
     if (info->pl->metrics) {
         info->pl->metrics->packets_sent++;
         info->pl->metrics->packets_queued--;
+        info->pl->metrics->bytes_queued -= pktsize;
     }
     return pktsize;
 }
