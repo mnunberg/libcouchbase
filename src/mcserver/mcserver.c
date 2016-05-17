@@ -548,6 +548,9 @@ on_connected(lcbio_SOCKET *sock, void *data, lcb_error_t err, lcbio_OSERR syserr
     procs.cb_flush_ready = on_flush_ready;
     server->connctx = lcbio_ctx_new(sock, server, &procs);
     server->connctx->subsys = "memcached";
+    if (server->pipeline.metrics) {
+        server->connctx->sock->metrics = &server->pipeline.metrics->iometrics;
+    }
     server->pipeline.flush_start = (mcreq_flushstart_fn)mcserver_flush;
 
     tmo = get_next_timeout(server);
