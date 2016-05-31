@@ -68,6 +68,7 @@ public:
         entries.push_back(ent);
         raw_entries.push_back(ent);
         nservers = entries.size();
+        servers = (const lcb_SERVERMETRICS**)&raw_entries[0];
         return ent;
     }
 
