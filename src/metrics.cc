@@ -49,13 +49,9 @@ public:
         for (size_t ii = 0; ii < entries.size(); ++ii) {
             delete entries[ii];
         }
-        if (servers != NULL) {
-            free(servers);
-        }
     }
 
     MetricsEntry *get(const char *host, const char *port, int create) {
-        size_t old_nservers = nservers;
         std::string key;
         key.append(host).append(":").append(port);
         for (size_t ii = 0; ii < entries.size(); ++ii) {
@@ -72,14 +68,7 @@ public:
         entries.push_back(ent);
         raw_entries.push_back(ent);
         nservers = entries.size();
-        servers = (const lcb_SERVERMETRICS**) realloc(servers, nservers * sizeof(*servers));
-        if (servers != NULL) {
-            for (size_t ii = 0; ii < nservers; ++ii) {
-                servers[ii] = entries[ii];
-            }
-        } else {
-            nservers = old_nservers;
-        }
+        servers = (const lcb_SERVERMETRICS**)&raw_entries[0];
         return ent;
     }
 
